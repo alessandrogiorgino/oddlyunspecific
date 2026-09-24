@@ -1,0 +1,47 @@
+{% load static %}<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>auth — {{ site_name }}</title>
+<link rel="stylesheet" href="{% static 'css/writer.css' %}">
+</head>
+<body class="term term--login">
+
+<main class="login">
+  <pre class="login__banner">{{ site_name }} · authentication required</pre>
+
+  {% if form.errors %}
+  <p class="login__error">
+    &gt; rejected. wrong username, password or code.
+  </p>
+  {% endif %}
+
+  <form method="post" autocomplete="off">
+    {% csrf_token %}
+    <label for="id_username"><span class="prompt">user</span></label>
+    <input id="id_username" name="username" type="text" autocomplete="username"
+           autocapitalize="none" spellcheck="false" autofocus required>
+
+    <label for="id_password"><span class="prompt">pass</span></label>
+    <input id="id_password" name="password" type="password"
+           autocomplete="current-password" required>
+
+    {% comment %}
+    django-otp reads this field on the same POST: password and second factor
+    are checked in one step, so there is no half-authenticated session.
+    {% endcomment %}
+    <label for="id_otp_token"><span class="prompt">totp</span></label>
+    <input id="id_otp_token" name="otp_token" type="text" inputmode="numeric"
+           autocomplete="one-time-code" pattern="[0-9A-Za-z]*" spellcheck="false" required>
+
+    <input type="hidden" name="next" value="{{ next }}">
+    <button type="submit">authenticate</button>
+  </form>
+
+  <pre class="login__hint">5 failures locks this address for 30 minutes.</pre>
+</main>
+
+</body>
+</html>

@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+
+{% block title %}private — {{ SITE_NAME }}{% endblock %}
+{% block head_extra %}<meta name="robots" content="noindex, nofollow">{% endblock %}
+
+{% block content %}
+<article class="post">
+  <h1>{{ entry.display_title }}</h1>
+  <p class="meta private-note">
+    <time datetime="{{ entry.entry_date|date:'Y-m-d' }}">{{ entry.entry_date|date:"j F Y" }}</time>
+    · private
+  </p>
+
+  {% comment %}
+  Rendered on every request rather than stored: caching this HTML in the
+  database would put the plaintext back in the column encryption protects.
+  {% endcomment %}
+  <div class="prose">{{ entry.html|safe }}</div>
+</article>
+
+<p class="back"><a href="{% url 'journal:entry_list' %}">← private</a></p>
+{% endblock %}

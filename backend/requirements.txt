@@ -1,0 +1,23 @@
+# Ranges, not exact pins: a rebuild picks up security patches inside the same
+# minor. Run `make freeze` to lock exact versions once the stack is live.
+
+# Core
+Django>=5.2,<5.3                 # 5.2 is the LTS line
+psycopg[binary]>=3.2,<4
+dj-database-url>=2.3,<3
+python-dotenv>=1.0,<2
+gunicorn>=23,<24
+whitenoise>=6.8,<7
+
+# Security
+argon2-cffi>=23.1                # password hashing
+django-axes>=7.0,<9              # brute-force lockout
+django-otp>=1.5,<2               # mandatory TOTP for staff
+cryptography>=44                 # Fernet, journal encryption at rest
+qrcode>=8.0                      # TOTP enrolment QR, printed in the terminal
+
+# Content
+Markdown>=3.7,<4
+Pygments>=2.18                   # server-side syntax highlighting, zero JS
+nh3>=0.2.20                      # HTML sanitiser (ammonia bindings)
+Pillow>=11                       # uploads are re-encoded through it

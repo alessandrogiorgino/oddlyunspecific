@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+
+{% block title %}{{ tag.name }} — {{ SITE_NAME }}{% endblock %}
+
+{% block content %}
+<h1 class="section-title">{{ tag.name }}</h1>
+<p class="meta">{{ count }} post{{ count|pluralize }}</p>
+
+{% include "blog/_index.html" %}
+
+<p class="back"><a href="{% url 'blog:post_list' %}">← index</a></p>
+{% endblock %}

@@ -1,0 +1,65 @@
+# Site block for the SHARED Caddy of the VPS (the detoxy / back_to_me one that
+# owns :80/:443). Paste it into that project's Caddyfile next to the weddypal
+# and paupernopaper blocks, then reload:
+#
+#   docker exec back_to_me_caddy caddy reload --config /etc/caddy/Caddyfile
+#
+# It proxies straight to this project's container, so `back_to_me_caddy` must be
+# attached to the oddlyunspecific network first (`make link-caddy` does that).
+# This project runs no Caddy of its own — same topology as WeddyPal.
+
+# www -> apex, one canonical host. Keeps ALLOWED_HOSTS and the sitemap honest.
+www.oddlyunspecific.com {
+	redir https://oddlyunspecific.com{uri} permanent
+}
+
+oddlyunspecific.com {
+
+	# Refuse oversized bodies before they reach Django. 12MB covers an image
+	# upload from the writer console; nothing else here needs a big body.
+	request_body {
+		max_size 12MB
+	}
+
+	encode zstd gzip
+
+	reverse_proxy oddlyunspecific-web-1:8000 {
+		header_up Host {host}
+		header_up X-Forwarded-Proto {scheme}
+
+		# Caddy appends the real client IP to any X-Forwarded-For the client
+		# sent, so Django reads the LAST entry, not the first. See
+		# config/middleware.py RealClientIPMiddleware.
+	}
+
+	# Django sets the full security header set per-path (config/middleware.py).
+	# Caddy only removes its own fingerprint.
+	header {
+		-Server
+	}
+
+	log {
+		output file /var/log/caddy/oddlyunspecific.log {
+			roll_size 10MB
+			roll_keep 5
+		}
+	}
+}
+
+# --- If you ever turn the Cloudflare orange cloud on --------------------------
+#
+# 1. Set TRUSTED_PROXY=cloudflare in .env and `make prod-up`.
+# 2. Cloudflare SSL/TLS mode: Full (strict).
+# 3. Issue a Cloudflare Origin CA certificate for oddlyunspecific.com, drop the
+#    pem+key on the VPS, mount them into the shared Caddy, and replace the
+#    automatic TLS for this block with:
+#
+#        tls /etc/caddy/certs/oddlyunspecific.pem /etc/caddy/certs/oddlyunspecific.key
+#
+#    (HTTP-01 through an orange-clouded hostname is flaky; the Origin CA cert is
+#    valid 15 years and needs no ACME at all.)
+# 4. Lock the origin down so only Cloudflare can reach it — on the VPS:
+#        ufw allow from <cloudflare-range> to any port 443 proto tcp   # x each range
+#        ufw deny 443/tcp
+#    Ranges: https://www.cloudflare.com/ips/
+# 5. Remember: the IP is only hidden if EVERY domain on this VPS is proxied.

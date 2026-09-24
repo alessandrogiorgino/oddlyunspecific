@@ -1,0 +1,56 @@
+/* Pygments theme. Written once against CSS variables so the same file works on
+   the light blog and the dark console; Pygments itself runs server-side at
+   render time, which is why no page here ships a highlighter. */
+
+:root {
+  --hl-comment: #8a877c;
+  --hl-keyword: #8a4b2a;
+  --hl-string:  #3f6b39;
+  --hl-number:  #7a5230;
+  --hl-name:    #2c4a6e;
+  --hl-op:      #6b6860;
+  --hl-error:   #a03030;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --hl-comment: #6d6a61;
+    --hl-keyword: #d8a07a;
+    --hl-string:  #9fc08f;
+    --hl-number:  #d3b47c;
+    --hl-name:    #8fb4d9;
+    --hl-op:      #9a968c;
+    --hl-error:   #e08585;
+  }
+}
+
+.codehilite .c, .codehilite .c1, .codehilite .cm, .codehilite .cs,
+.codehilite .cp, .codehilite .cpf { color: var(--hl-comment); font-style: italic; }
+
+.codehilite .k, .codehilite .kc, .codehilite .kd, .codehilite .kn,
+.codehilite .kp, .codehilite .kr, .codehilite .kt,
+.codehilite .ow { color: var(--hl-keyword); }
+
+.codehilite .s, .codehilite .s1, .codehilite .s2, .codehilite .sb,
+.codehilite .sc, .codehilite .sd, .codehilite .se, .codehilite .sh,
+.codehilite .si, .codehilite .sx, .codehilite .sr, .codehilite .ss,
+.codehilite .sa { color: var(--hl-string); }
+
+.codehilite .m, .codehilite .mi, .codehilite .mf, .codehilite .mh,
+.codehilite .mo, .codehilite .il { color: var(--hl-number); }
+
+.codehilite .n, .codehilite .na, .codehilite .nb, .codehilite .nc,
+.codehilite .nd, .codehilite .ne, .codehilite .nf, .codehilite .ni,
+.codehilite .nl, .codehilite .nn, .codehilite .no, .codehilite .nt,
+.codehilite .nv, .codehilite .bp, .codehilite .vc, .codehilite .vg,
+.codehilite .vi { color: var(--hl-name); }
+
+.codehilite .o, .codehilite .p { color: var(--hl-op); }
+
+.codehilite .err { color: var(--hl-error); }
+
+.codehilite .gd { color: var(--hl-error); }
+.codehilite .gi { color: var(--hl-string); }
+.codehilite .gh, .codehilite .gu { color: var(--hl-name); font-weight: 600; }
+.codehilite .ge { font-style: italic; }
+.codehilite .gs { font-weight: 600; }

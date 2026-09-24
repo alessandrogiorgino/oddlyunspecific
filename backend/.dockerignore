@@ -1,0 +1,11 @@
+# Build context hygiene: none of this belongs in the image, and copying it in
+# would also bust the layer cache on every local test run.
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+staticfiles/
+media/
+*.sqlite3
+.pytest_cache/
+.DS_Store

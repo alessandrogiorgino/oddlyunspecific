@@ -1,0 +1,21 @@
+{% load static %}<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>locked</title>
+<link rel="stylesheet" href="{% static 'css/writer.css' %}">
+</head>
+<body class="term term--login">
+<main class="login">
+  <pre class="login__banner">access locked</pre>
+  <p class="login__error">
+    &gt; too many failed attempts from this address.<br>
+    &gt; the lock lifts automatically in 30 minutes.
+  </p>
+  <pre class="login__hint">If this was you: `make prod-shell` then
+axes_reset_ip, or just wait it out.</pre>
+</main>
+</body>
+</html>

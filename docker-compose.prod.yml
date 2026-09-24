@@ -1,0 +1,75 @@
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ${DB_USER:-oddly}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?set DB_PASSWORD}
+      POSTGRES_DB: ${DB_NAME:-oddly}
+      # Refuse trust/md5 auth even on the internal network.
+      POSTGRES_INITDB_ARGS: "--auth-host=scram-sha-256 --auth-local=scram-sha-256"
+      POSTGRES_HOST_AUTH_METHOD: scram-sha-256
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    # No `ports:` on purpose — Postgres is reachable only from this network.
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-oddly} -d ${DB_NAME:-oddly}"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  web:
+    build: ./backend
+    expose:
+      - "8000"
+    environment:
+      DJANGO_DEBUG: "0"
+      DJANGO_SECRET_KEY: ${DJANGO_SECRET_KEY:?set DJANGO_SECRET_KEY}
+      DJANGO_ALLOWED_HOSTS: ${DOMAIN:?set DOMAIN},www.${DOMAIN}
+      DJANGO_CSRF_TRUSTED_ORIGINS: https://${DOMAIN},https://www.${DOMAIN}
+      DJANGO_ADMIN_PATH: ${DJANGO_ADMIN_PATH:?set DJANGO_ADMIN_PATH}
+      JOURNAL_ENCRYPTION_KEYS: ${JOURNAL_ENCRYPTION_KEYS:?set JOURNAL_ENCRYPTION_KEYS}
+      DATABASE_URL: postgres://${DB_USER:-oddly}:${DB_PASSWORD}@db:5432/${DB_NAME:-oddly}
+      DB_HOST: db
+      DB_PORT: "5432"
+      SITE_URL: https://${DOMAIN}
+      SITE_NAME: ${SITE_NAME:-oddlyunspecific}
+      SITE_TAGLINE: ${SITE_TAGLINE:-}
+      TRUSTED_PROXY: ${TRUSTED_PROXY:-caddy}
+      TIME_ZONE: ${TIME_ZONE:-Europe/Rome}
+      LANGUAGE_CODE: ${LANGUAGE_CODE:-en-us}
+    volumes:
+      - media:/app/media
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+
+    # --- Container hardening ---
+    # Static files are collected at image build time, migrations write only to
+    # Postgres, and uploads go to the `media` volume — so the root filesystem
+    # never needs to be writable.
+    read_only: true
+    tmpfs:
+      - /tmp:size=64m,mode=1777
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0) if urllib.request.urlopen(urllib.request.Request('http://127.0.0.1:8000/healthz/', headers={'Host':'localhost'}), timeout=3).status==200 else sys.exit(1)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 40s
+
+# No Caddy here on purpose: the shared Caddy of the VPS (`back_to_me_caddy`, the
+# detoxy one that owns :80/:443) is attached to this project's network and
+# proxies straight to `oddlyunspecific-web-1` — exactly how WeddyPal and
+# PauperNoPaper are wired. The site block to paste there is in ./Caddyfile.
+
+volumes:
+  pgdata:
+  media:

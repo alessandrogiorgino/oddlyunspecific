@@ -1,0 +1,33 @@
+{% load static %}<!doctype html>
+<html lang="{{ LANGUAGE_CODE|default:"en" }}">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{% block title %}{{ SITE_NAME }}{% endblock %}</title>
+<meta name="description" content="{% block description %}{{ SITE_TAGLINE }}{% endblock %}">
+{% block head_extra %}{% endblock %}
+<link rel="stylesheet" href="{% static 'css/site.css' %}">
+<link rel="alternate" type="application/rss+xml" title="{{ SITE_NAME }}" href="{% url 'blog:feed' %}">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 16 16%22><text y=%2213%22 font-size=%2214%22>·</text></svg>">
+</head>
+<body>
+<a class="skip" href="#main">skip to content</a>
+
+<header class="masthead">
+  <a class="wordmark" href="{% url 'blog:post_list' %}">{{ SITE_NAME }}</a>
+  {% if SITE_TAGLINE %}<p class="tagline">{{ SITE_TAGLINE }}</p>{% endif %}
+</header>
+
+<main id="main">
+{% block content %}{% endblock %}
+</main>
+
+<footer class="colophon">
+  <a href="{% url 'blog:feed' %}">rss</a>
+  {% if user.is_authenticated and user.is_staff %}
+  · <a href="{% url 'writer:console' %}">console</a>
+  · <a href="{% url 'journal:entry_list' %}">private</a>
+  {% endif %}
+</footer>
+</body>
+</html>

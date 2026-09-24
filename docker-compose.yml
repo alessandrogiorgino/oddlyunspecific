@@ -1,0 +1,49 @@
+# Development stack. Insecure on purpose and bound to localhost only.
+# Production is docker-compose.prod.yml + .env.
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: oddly
+      POSTGRES_PASSWORD: oddly
+      POSTGRES_DB: oddly
+    ports:
+      - "127.0.0.1:5433:5432"
+    volumes:
+      - devpgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U oddly"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  web:
+    build: ./backend
+    command: ["python", "manage.py", "runserver", "0.0.0.0:8000"]
+    environment:
+      DJANGO_DEBUG: "1"
+      DJANGO_SECRET_KEY: dev-insecure-not-for-production
+      DJANGO_ADMIN_PATH: admin
+      DATABASE_URL: postgres://oddly:oddly@db:5432/oddly
+      DB_HOST: db
+      DB_PORT: "5432"
+      SITE_URL: http://localhost:8000
+      SITE_NAME: oddlyunspecific
+      SITE_TAGLINE: notes, mostly
+      TRUSTED_PROXY: none
+      TIME_ZONE: Europe/Rome
+      # Dev-only Fernet key. Production reads it from .env and refuses to boot
+      # without one.
+      JOURNAL_ENCRYPTION_KEYS: ZGV2LW9ubHktZmVybmV0LWtleS1ub3Qtc2VjdXJlISE=
+    ports:
+      - "127.0.0.1:8000:8000"
+    volumes:
+      - ./backend:/app
+      - devmedia:/app/media
+    depends_on:
+      db:
+        condition: service_healthy
+
+volumes:
+  devpgdata:
+  devmedia:

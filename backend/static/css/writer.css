@@ -1,0 +1,250 @@
+/* The console. Dark, monospace, full-height, keyboard-first.
+   Deliberately the opposite of the public pages: reading is calm, writing is
+   a terminal. */
+
+:root {
+  --t-bg:     #0b0c0b;
+  --t-panel:  #101210;
+  --t-fg:     #c7cec3;
+  --t-dim:    #5f6a5d;
+  --t-rule:   #1e221d;
+  --t-accent: #7ee787;
+  --t-warn:   #e3b341;
+  --t-error:  #f07a7a;
+  --t-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas,
+            "Liberation Mono", monospace;
+}
+
+* { box-sizing: border-box; }
+
+/* The browser's own `[hidden] { display: none }` is a UA rule, so any author
+   rule that sets `display` beats it — and `.pane { display: flex }` below did
+   exactly that, leaving the side pane permanently on screen and empty. */
+[hidden] { display: none !important; }
+
+html, body { height: 100%; }
+
+body.term {
+  margin: 0;
+  background: var(--t-bg);
+  color: var(--t-fg);
+  font: 13px/1.5 var(--t-mono);
+  overflow: hidden;
+  /* Subtle phosphor cast; no animation, nothing that costs a repaint. */
+  text-shadow: 0 0 1px rgba(126, 231, 135, .08);
+}
+
+.shell {
+  display: grid;
+  grid-template-rows: auto 1fr auto auto;
+  height: 100dvh;
+}
+
+/* --- bars ---------------------------------------------------------------- */
+
+.bar {
+  display: flex;
+  align-items: center;
+  gap: .5rem;
+  padding: .4rem .75rem;
+  border-bottom: 1px solid var(--t-rule);
+  background: var(--t-panel);
+  font-size: 12px;
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.bar__id { color: var(--t-accent); }
+.bar__sep, .bar__user { color: var(--t-dim); }
+.bar__buf { color: var(--t-fg); overflow: hidden; text-overflow: ellipsis; }
+.bar__state { color: var(--t-dim); }
+.bar__state[data-status="published"] { color: var(--t-accent); }
+.bar__state[data-status="draft"] { color: var(--t-warn); }
+.bar__state[data-status="private"] { color: #b48ead; }
+.bar__spacer { flex: 1; }
+.bar__dirty { color: var(--t-warn); }
+
+.bar--cmd {
+  border-bottom: 0;
+  border-top: 1px solid var(--t-rule);
+  padding: .5rem .75rem;
+}
+
+.prompt { color: var(--t-accent); user-select: none; }
+
+.cmd {
+  flex: 1;
+  background: transparent;
+  border: 0;
+  outline: 0;
+  color: var(--t-fg);
+  font: inherit;
+  caret-color: var(--t-accent);
+}
+
+/* --- panes --------------------------------------------------------------- */
+
+.panes { display: flex; min-height: 0; }
+
+.pane { min-width: 0; display: flex; flex-direction: column; }
+
+.pane--edit { flex: 1; }
+
+.pane--side {
+  flex: 0 0 42%;
+  border-left: 1px solid var(--t-rule);
+  background: var(--t-panel);
+}
+
+/* Closed-state affordance: a slim vertical tab down the right edge. Takes no
+   row of its own and swaps places with the pane it opens. */
+.previewtab {
+  flex: 0 0 auto;
+  writing-mode: vertical-rl;
+  background: var(--t-panel);
+  border: 0;
+  border-left: 1px solid var(--t-rule);
+  color: var(--t-dim);
+  font: inherit;
+  font-size: 11px;
+  letter-spacing: .14em;
+  padding: 1rem .4rem;
+  cursor: pointer;
+}
+.previewtab:hover { color: var(--t-accent); }
+
+.pane__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: .35rem .6rem;
+  border-bottom: 1px solid var(--t-rule);
+  color: var(--t-dim);
+  font-size: 11px;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+
+.pane__body { overflow: auto; padding: .9rem 1.1rem; }
+
+.ghost {
+  background: none; border: 0; color: var(--t-dim);
+  font: inherit; cursor: pointer; padding: 0 .25rem;
+}
+.ghost:hover { color: var(--t-fg); }
+
+.title {
+  background: transparent;
+  border: 0;
+  border-bottom: 1px solid var(--t-rule);
+  outline: 0;
+  color: var(--t-fg);
+  font: 15px/1.4 var(--t-mono);
+  padding: .8rem 1.1rem;
+}
+.title::placeholder { color: var(--t-dim); }
+.title:disabled { color: var(--t-dim); }
+
+.body {
+  flex: 1;
+  background: transparent;
+  border: 0;
+  outline: 0;
+  resize: none;
+  color: var(--t-fg);
+  font: 13px/1.75 var(--t-mono);
+  padding: 1rem 1.1rem 2rem;
+  caret-color: var(--t-accent);
+  tab-size: 2;
+}
+.body:disabled { color: var(--t-dim); }
+
+.body.dropping { background: rgba(126, 231, 135, .06); }
+
+/* --- log ----------------------------------------------------------------- */
+
+.log {
+  max-height: 11rem;
+  overflow: auto;
+  padding: .5rem .75rem;
+  border-top: 1px solid var(--t-rule);
+  background: var(--t-bg);
+  font-size: 12px;
+}
+.log:empty { display: none; }
+
+.log__line { white-space: pre-wrap; word-break: break-word; }
+.log__line--in    { color: var(--t-dim); }
+.log__line--ok    { color: var(--t-fg); }
+.log__line--good  { color: var(--t-accent); }
+.log__line--warn  { color: var(--t-warn); }
+.log__line--err   { color: var(--t-error); }
+
+.log table { border-collapse: collapse; margin: .2rem 0 .4rem; }
+.log td { padding: 0 1.1rem .05rem 0; vertical-align: top; }
+.log a { color: inherit; }
+
+/* --- preview pane -------------------------------------------------------- */
+
+.pane__body h1, .pane__body h2, .pane__body h3 { font-size: 14px; margin: 1.2rem 0 .4rem; }
+.pane__body p, .pane__body ul, .pane__body ol, .pane__body blockquote { margin: 0 0 .9rem; }
+.pane__body a { color: var(--t-accent); }
+.pane__body img { max-width: 100%; height: auto; }
+.pane__body pre, .pane__body .codehilite {
+  background: #0a0b0a; padding: .7rem .8rem; overflow-x: auto; border-radius: 2px;
+}
+.pane__body code { background: #0a0b0a; padding: .05em .3em; }
+.pane__body blockquote {
+  border-left: 2px solid var(--t-rule); padding-left: .8rem; margin-left: 0; color: var(--t-dim);
+}
+.pane__body table { width: 100%; border-collapse: collapse; }
+.pane__body th, .pane__body td { border-bottom: 1px solid var(--t-rule); padding: .3rem .4rem; text-align: left; }
+
+/* --- login --------------------------------------------------------------- */
+
+.term--login { display: grid; place-items: center; overflow: auto; }
+
+.login { width: min(30rem, 90vw); padding: 2rem 0; }
+
+.login__banner {
+  color: var(--t-accent);
+  margin: 0 0 1.5rem;
+  white-space: pre-wrap;
+}
+
+.login form { display: grid; grid-template-columns: 4.5rem 1fr; gap: .5rem .75rem; align-items: center; }
+
+.login label { color: var(--t-dim); }
+
+.login input {
+  background: var(--t-panel);
+  border: 1px solid var(--t-rule);
+  color: var(--t-fg);
+  font: inherit;
+  padding: .45rem .6rem;
+  outline: 0;
+  caret-color: var(--t-accent);
+}
+.login input:focus { border-color: var(--t-accent); }
+
+.login button {
+  grid-column: 2;
+  justify-self: start;
+  margin-top: .5rem;
+  background: transparent;
+  border: 1px solid var(--t-accent);
+  color: var(--t-accent);
+  font: inherit;
+  padding: .4rem 1rem;
+  cursor: pointer;
+}
+.login button:hover { background: var(--t-accent); color: var(--t-bg); }
+
+.login__error { color: var(--t-error); margin: 0 0 1rem; }
+.login__hint { color: var(--t-dim); margin: 1.75rem 0 0; white-space: pre-wrap; }
+
+@media (max-width: 40rem) {
+  .pane--side { position: fixed; inset: 0; flex: none; z-index: 5; }
+  .login form { grid-template-columns: 1fr; }
+  .login button { grid-column: 1; }
+}

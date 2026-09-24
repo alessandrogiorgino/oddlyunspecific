@@ -1,0 +1,27 @@
+{% comment %}
+Shared by the homepage and the tag pages.
+
+The excerpt is post.summary: written by hand with `summary <text>` in the
+console, or derived at save time from the rendered body with the tags already
+stripped. Never post.body, which is raw markdown and would leak syntax onto
+the index.
+
+Multi-line comments must use this tag. The hash form is single-line only and
+renders straight into the page when it spans more than one.
+{% endcomment %}
+{% for year, posts in years.items %}
+<section class="year">
+  <h2>{{ year }}</h2>
+  <ul class="index">
+    {% for post in posts %}
+    <li>
+      <time datetime="{{ post.published_at|date:'Y-m-d' }}">{{ post.published_at|date:"M j" }}</time>
+      <a href="{{ post.get_absolute_url }}">{{ post.title }}</a>
+      {% if post.summary %}
+      <p class="excerpt">{{ post.summary|truncatechars:180 }}</p>
+      {% endif %}
+    </li>
+    {% endfor %}
+  </ul>
+</section>
+{% endfor %}

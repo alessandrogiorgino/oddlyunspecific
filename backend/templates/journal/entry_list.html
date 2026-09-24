@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+
+{% block title %}private — {{ SITE_NAME }}{% endblock %}
+{% block head_extra %}<meta name="robots" content="noindex, nofollow">{% endblock %}
+
+{% block content %}
+<h1 class="section-title">private</h1>
+<p class="meta private-note">
+  {{ count }} entr{{ count|pluralize:"y,ies" }} · encrypted at rest · visible only to you
+</p>
+
+{% if not years %}
+  <p class="empty">Nothing written yet. Open the <a href="{% url 'writer:console' %}">console</a> and type <code>j new</code>.</p>
+{% endif %}
+
+{% for year, entries in years.items %}
+<section class="year">
+  <h2>{{ year }}</h2>
+  <ul class="index">
+    {% for entry in entries %}
+    <li>
+      <time datetime="{{ entry.entry_date|date:'Y-m-d' }}">{{ entry.entry_date|date:"M j" }}</time>
+      <a href="{{ entry.get_absolute_url }}">{% if entry.pinned %}★ {% endif %}{{ entry.display_title }}</a>
+    </li>
+    {% endfor %}
+  </ul>
+</section>
+{% endfor %}
+
+<p class="back"><a href="{% url 'blog:post_list' %}">← index</a></p>
+{% endblock %}

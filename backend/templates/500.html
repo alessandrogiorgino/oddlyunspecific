@@ -1,0 +1,17 @@
+{% load static %}<!doctype html>
+{# Standalone on purpose: no context processors, no database access. #}
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>500</title>
+<link rel="stylesheet" href="{% static 'css/site.css' %}">
+</head>
+<body>
+<main id="main">
+  <p class="empty">500 — something broke on my side. It is logged.</p>
+  <p class="back"><a href="/">← index</a></p>
+</main>
+</body>
+</html>

@@ -1,0 +1,66 @@
+{% load static %}<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<meta name="csrf-token" content="{{ csrf_token }}">
+<meta name="boot-user" content="{{ boot_user }}">
+<meta name="admin-path" content="/{{ admin_path }}/">
+<title>console — {{ SITE_NAME }}</title>
+<link rel="stylesheet" href="{% static 'css/writer.css' %}">
+<link rel="stylesheet" href="{% static 'css/code.css' %}">
+</head>
+<body class="term">
+
+<div class="shell">
+
+  <header class="bar bar--top">
+    <span class="bar__id">{{ SITE_NAME }}</span>
+    <span class="bar__sep">·</span>
+    <span id="bufname" class="bar__buf">— no buffer —</span>
+    <span id="bufstate" class="bar__state"></span>
+    <span class="bar__spacer"></span>
+    <span id="dirty" class="bar__dirty" hidden>●</span>
+    <span class="bar__user">{{ boot_user }}@{{ SITE_NAME }}</span>
+  </header>
+
+  <div class="panes">
+    <section class="pane pane--edit">
+      <input id="title" class="title" type="text" placeholder="untitled"
+             spellcheck="false" autocomplete="off" disabled>
+      <textarea id="body" class="body" spellcheck="true" autocomplete="off"
+                autocapitalize="sentences" placeholder="" disabled></textarea>
+    </section>
+
+    {% comment %}
+    Shown only while the preview pane is closed, so the shortcut is always on
+    screen without taking a row of the status bar. Label is filled in by JS,
+    which knows whether to say ⌘ or ctrl.
+    {% endcomment %}
+    <button id="previewtab" class="previewtab" type="button"
+            title="open the live preview"></button>
+
+    <aside id="side" class="pane pane--side" hidden>
+      <div class="pane__head"><span id="sidetitle">output</span>
+        <button id="sideclose" class="ghost" type="button" title="close (esc)">×</button>
+      </div>
+      <div id="sidebody" class="pane__body"></div>
+    </aside>
+  </div>
+
+  <section id="log" class="log" aria-live="polite"></section>
+
+  <footer class="bar bar--cmd">
+    <label for="cmd" class="prompt">&#9656;</label>
+    <input id="cmd" class="cmd" type="text" autocomplete="off" autocapitalize="none"
+           autocorrect="off" spellcheck="false" autofocus
+           aria-label="command line">
+  </footer>
+
+</div>
+
+{# External file, no inline script: the console runs under script-src 'self'. #}
+<script src="{% static 'js/writer.js' %}" defer></script>
+</body>
+</html>

@@ -1,0 +1,9 @@
+{% extends "base.html" %}
+
+{% block content %}
+{% if not years %}
+  <p class="empty">Nothing here yet.</p>
+{% endif %}
+
+{% include "blog/_index.html" %}
+{% endblock %}
