@@ -34,9 +34,19 @@ body {
   font: 1.0625rem/1.65 ui-serif, Georgia, "Iowan Old Style", "Times New Roman", serif;
   font-synthesis-weight: none;
   text-rendering: optimizeLegibility;
+  /* Sticky footer: on a short page — a one-line post especially — <main> grows
+     to fill the viewport so the colophon (rss · console · private) sits at the
+     bottom instead of floating under the text. Long pages are unaffected. */
+  min-height: 100vh;
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
 }
 
 main, .masthead, .colophon { max-width: var(--measure); margin-inline: auto; }
+/* Grows to absorb the free space; the colophon's 5rem top margin is honoured
+   in both the short-page and long-page cases. */
+main { flex: 1 0 auto; }
 
 .skip {
   position: absolute;
@@ -94,7 +104,7 @@ main, .masthead, .colophon { max-width: var(--measure); margin-inline: auto; }
    so the excerpt hangs under the title rather than under the date. */
 .index li {
   display: grid;
-  grid-template-columns: 4.25rem 1fr;
+  grid-template-columns: 7rem 1fr;
   column-gap: 1rem;
   align-items: baseline;
   padding: .55rem 0;

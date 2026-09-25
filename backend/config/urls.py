@@ -34,5 +34,10 @@ urlpatterns = [
     path("", include("apps.blog.urls")),
 ]
 
+if settings.DEBUG:
+    # Live-reload SSE endpoint. Dev only — the app that serves it is added to
+    # INSTALLED_APPS under the same DEBUG guard in settings.py.
+    urlpatterns += [path("__reload__/", include("django_browser_reload.urls"))]
+
 handler404 = "apps.blog.views.not_found"
 handler500 = "apps.blog.views.server_error"

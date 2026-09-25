@@ -54,7 +54,8 @@ body.term {
   overflow: hidden;
 }
 
-.bar__id { color: var(--t-accent); }
+.bar__id { color: var(--t-accent); text-decoration: none; }
+a.bar__id:hover { text-decoration: underline; }
 .bar__sep, .bar__user { color: var(--t-dim); }
 .bar__buf { color: var(--t-fg); overflow: hidden; text-overflow: ellipsis; }
 .bar__state { color: var(--t-dim); }
@@ -190,6 +191,26 @@ body.term {
 .pane__body p, .pane__body ul, .pane__body ol, .pane__body blockquote { margin: 0 0 .9rem; }
 .pane__body a { color: var(--t-accent); }
 .pane__body img { max-width: 100%; height: auto; }
+
+/* Click-to-resize: each preview image is wrapped so a resize button can sit in
+   its bottom-right corner. A tap cycles the width (full → 66% → 50% → 33%). The
+   button stays partly visible — touch has no hover — over a dark chip so its
+   two-arrow icon reads on any photo, and is a comfortable touch target. */
+.pane__body .imgwrap { position: relative; display: inline-block; max-width: 100%; line-height: 0; }
+.pane__body .imgwrap img { display: block; -webkit-user-drag: none; user-select: none; }
+.pane__body .imgwrap:hover img { outline: 1px dashed var(--t-accent); outline-offset: 2px; }
+.imghandle {
+  position: absolute; right: 6px; bottom: 6px;
+  display: flex; align-items: center; justify-content: center;
+  width: 30px; height: 30px; padding: 0; margin: 0;
+  color: var(--t-accent);
+  background: rgba(11, 12, 11, .82); border: 1px solid var(--t-accent);
+  border-radius: 5px; cursor: pointer;
+  opacity: .7; transition: opacity .12s, transform .06s;
+}
+.imghandle svg { width: 16px; height: 16px; display: block; pointer-events: none; }
+.imgwrap:hover .imghandle, .imghandle:focus-visible { opacity: 1; }
+.imghandle:active { transform: scale(.92); }
 .pane__body pre, .pane__body .codehilite {
   background: #0a0b0a; padding: .7rem .8rem; overflow-x: auto; border-radius: 2px;
 }

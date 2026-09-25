@@ -19,7 +19,9 @@ services:
 
   web:
     build: ./backend
-    command: ["python", "manage.py", "runserver", "0.0.0.0:8000"]
+    # --nostatic: let WhiteNoise serve /static so its no-cache header lands and
+    # edits show on a soft refresh (see WHITENOISE_USE_FINDERS in settings).
+    command: ["python", "manage.py", "runserver", "--nostatic", "0.0.0.0:8000"]
     environment:
       DJANGO_DEBUG: "1"
       DJANGO_SECRET_KEY: dev-insecure-not-for-production
@@ -29,7 +31,7 @@ services:
       DB_PORT: "5432"
       SITE_URL: http://localhost:8000
       SITE_NAME: oddlyunspecific
-      SITE_TAGLINE: notes, mostly
+      SITE_TAGLINE: Thoughts, mostly
       TRUSTED_PROXY: none
       TIME_ZONE: Europe/Rome
       # Dev-only Fernet key. Production reads it from .env and refuses to boot

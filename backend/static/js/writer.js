@@ -24,7 +24,8 @@
     sidetitle: document.getElementById("sidetitle"),
     sidebody: document.getElementById("sidebody"),
     sideclose: document.getElementById("sideclose"),
-    previewtab: document.getElementById("previewtab")
+    previewtab: document.getElementById("previewtab"),
+    home: document.getElementById("home")
   };
 
   /* Label the shortcuts the way this keyboard actually spells them. */
@@ -187,7 +188,8 @@
       [MOD + "b", "bold — wraps the selection, press again to remove"],
       [MOD + "i", "italic"],
       [MOD + "e", "inline code"],
-      ["drop / paste", "upload an image and insert it at the cursor"]
+      ["drop / paste", "upload an image and insert it at the cursor"],
+      ["preview ⤢ icon", "tap an image's corner icon to cycle its size — or `resize <px>`"]
     ]);
   });
 
@@ -267,6 +269,21 @@
     setDirty(true);
     say("summary set (unsaved)");
   });
+
+  define(["resize", "img"], "resize the image at the cursor — `resize 480` / `resize full`",
+    function (args) {
+      if (!requireBuffer()) { return; }
+      var arg = (args[0] || "").toLowerCase();
+      var width = null;
+      if (arg && arg !== "full" && arg !== "orig" && arg !== "0") {
+        width = parseInt(args[0], 10);
+        if (!(width > 0)) { return warn("width must be a positive number of px, or `full`"); }
+      }
+      if (!setImageWidth(width)) {
+        return warn("no image at the cursor — put the caret on an image line first");
+      }
+      ok(width ? "width → " + width + "px" : "width cleared — natural size");
+    });
 
   define(["tags"], "set tags — `tags rust, notes`", function (args) {
     if (!requireBuffer() || buf.kind === "journal") { return; }
@@ -426,7 +443,7 @@
     return api("upload/", { method: "POST", form: form }).then(function (data) {
       pending.remove();
       insertAtCursor("\n![](" + data.url + ")\n");
-      ok("inserted " + data.url);
+      ok("inserted " + data.url + " · resize with `resize <px>`, e.g. resize 480");
     }).catch(function (error) { pending.remove(); fail(error); });
   }
 
@@ -445,6 +462,35 @@
            published — bypasses included, which is the point of previewing. */
         var scrolled = els.sidebody.scrollTop;
         els.sidebody.innerHTML = data.html;
+        // Number the images in render order (so a drag maps an <img> back to
+        // its markdown token by position), turn OFF the browser's native image
+        // drag — which otherwise drags the file to Finder — and give each a
+        // corner handle to grab for resizing on both mouse and touch.
+        var imgs = els.sidebody.querySelectorAll("img");
+        for (var i = 0; i < imgs.length; i++) {
+          var pimg = imgs[i];
+          pimg.dataset.imageIndex = i;
+          pimg.draggable = false;
+          var wrap = document.createElement("span");
+          wrap.className = "imgwrap";
+          pimg.parentNode.insertBefore(wrap, pimg);
+          wrap.appendChild(pimg);
+          var handle = document.createElement("button");
+          handle.type = "button";
+          handle.className = "imghandle";
+          handle.setAttribute("aria-label", "resize the image");
+          handle.title = "resize (full → 66% → 50% → 33%)";
+          handle.dataset.imageIndex = i;
+          // Two diagonal expand arrows. Inline SVG (no script) — CSP-safe.
+          handle.innerHTML =
+            '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" ' +
+            'stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+            '<polyline points="14 4 20 4 20 10"></polyline>' +
+            '<polyline points="10 20 4 20 4 14"></polyline>' +
+            '<line x1="20" y1="4" x2="13" y2="11"></line>' +
+            '<line x1="4" y1="20" x2="11" y2="13"></line></svg>';
+          wrap.appendChild(handle);
+        }
         // Re-rendering replaces the whole subtree; without this the pane jumps
         // back to the top on every keystroke.
         els.sidebody.scrollTop = scrolled;
@@ -520,6 +566,55 @@
     touched();
   }
 
+  /* Resize by setting a display width through the attr_list syntax the renderer
+   * already understands: ![alt](url){: width=480 }. The stored file is never
+   * touched — one canonical image, scaled by the browser, still capped at the
+   * column by max-width:100%. A null width strips the attribute back to the
+   * image's natural size. Two entry points share the same rewrite: the `resize`
+   * command (the image at the caret) and a drag in the preview (the Nth image).
+   */
+  var IMAGE_RE = "!\\[[^\\]]*\\]\\([^)]*\\)(\\s*\\{:?[^}]*\\})?";
+
+  function imageTokens(value) {
+    var out = [], m, re = new RegExp(IMAGE_RE, "g");
+    while ((m = re.exec(value))) {
+      out.push({ start: m.index, end: m.index + m[0].length, whole: m[0], block: m[1] || "" });
+    }
+    return out;
+  }
+
+  function rebuildToken(tok, width) {
+    // base = ![alt](url) without any trailing attr_list block.
+    var base = tok.block ? tok.whole.slice(0, tok.whole.length - tok.block.length) : tok.whole;
+    var inner = tok.block.replace(/^\s*\{:?\s*/, "").replace(/\s*\}\s*$/, "");
+    var parts = inner ? inner.split(/\s+/) : [];
+    parts = parts.filter(function (t) { return !/^width=/.test(t); });
+    if (width) { parts.push("width=" + width); }
+    return parts.length ? base + "{: " + parts.join(" ") + " }" : base;
+  }
+
+  function writeToken(tok, width) {
+    // setRangeText keeps the browser's own undo stack, so cmd+z still works;
+    // "preserve" leaves the caret where it was — the drag never touches it.
+    els.body.setRangeText(rebuildToken(tok, width), tok.start, tok.end, "preserve");
+    touched();
+  }
+
+  /* Command path: the image at, or nearest above, the caret. */
+  function setImageWidth(width) {
+    if (els.body.disabled) { return false; }
+    var caret = els.body.selectionStart;
+    var toks = imageTokens(els.body.value);
+    var target = null;
+    for (var i = 0; i < toks.length; i++) {
+      if (toks[i].start <= caret) { target = toks[i]; } else { break; }
+    }
+    if (!target) { return false; }
+    writeToken(target, width);
+    return true;
+  }
+
+
   function insertAtCursor(text) {
     var field = els.body;
     if (field.disabled) { return; }
@@ -588,6 +683,58 @@
 
   els.sideclose.addEventListener("click", closePreview);
   els.previewtab.addEventListener("click", function () { run("preview"); });
+
+  /* Click-to-resize in the preview. Each image carries a corner button; a click
+   * or tap cycles its width through a ladder of fractions of the image's own
+   * natural size — full → 66% → 50% → 33% → full. Same gesture on mouse and
+   * touch, no dragging, and never upscaled past the original. */
+  var LADDER = [1, 0.66, 0.5, 0.33];
+
+  function tokenWidth(tok) {
+    var m = /(?:^|\s)width=(\d+)/.exec(tok.block || "");
+    return m ? parseInt(m[1], 10) : null;
+  }
+
+  // Belt to the draggable=false brace: never let an image start a native drag.
+  els.sidebody.addEventListener("dragstart", function (event) {
+    if (event.target && event.target.tagName === "IMG") { event.preventDefault(); }
+  });
+
+  els.sidebody.addEventListener("click", function (event) {
+    var handle = event.target.closest && event.target.closest(".imghandle");
+    if (!handle || !buf) { return; }
+    event.preventDefault();
+    var img = handle.parentNode.querySelector("img");
+    if (!img) { return; }
+    var toks = imageTokens(els.body.value);
+    var idx = parseInt(handle.dataset.imageIndex, 10);
+    if (idx < 0 || idx >= toks.length) { return; }
+
+    var natural = img.naturalWidth || Math.round(img.getBoundingClientRect().width);
+    var frac = (tokenWidth(toks[idx]) || natural) / natural;
+    // Snap the current width to the nearest ladder rung, then step to the next.
+    var at = 0, best = Infinity;
+    for (var k = 0; k < LADDER.length; k++) {
+      var d = Math.abs(LADDER[k] - frac);
+      if (d < best) { best = d; at = k; }
+    }
+    var next = LADDER[(at + 1) % LADDER.length];
+    var width = next >= 0.999 ? null : Math.round(natural * next);
+    writeToken(toks[idx], width);
+    ok(width ? "width → " + Math.round(next * 100) + "% (" + width + "px)" : "width → full");
+  });
+
+  /* The logo doubles as "back to the site". Leaving with unsaved work would
+   * lose it, so save first and only follow the link once the save has landed —
+   * if it fails (e.g. the session expired) we stay put and say so. */
+  els.home.addEventListener("click", function (event) {
+    if (!dirty || !buf) { return; }        // clean buffer: let the link navigate
+    event.preventDefault();
+    save().then(function () {
+      if (dirty) { warn("save failed — staying so nothing is lost"); return; }
+      window.location.href = els.home.getAttribute("href");
+    });
+  });
 
   els.body.addEventListener("dragover", function (event) {
     event.preventDefault();

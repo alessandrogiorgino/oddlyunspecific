@@ -15,7 +15,7 @@ renders straight into the page when it spans more than one.
   <ul class="index">
     {% for post in posts %}
     <li>
-      <time datetime="{{ post.published_at|date:'Y-m-d' }}">{{ post.published_at|date:"M j" }}</time>
+      <time datetime="{{ post.published_at|date:'c' }}">{{ post.published_at|date:"M j, H:i" }}</time>
       <a href="{{ post.get_absolute_url }}">{{ post.title }}</a>
       {% if post.summary %}
       <p class="excerpt">{{ post.summary|truncatechars:180 }}</p>

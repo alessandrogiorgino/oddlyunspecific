@@ -16,7 +16,8 @@
 <div class="shell">
 
   <header class="bar bar--top">
-    <span class="bar__id">{{ SITE_NAME }}</span>
+    <a id="home" class="bar__id" href="{% url 'blog:post_list' %}"
+       title="save unsaved work and return to the site">← {{ SITE_NAME }}</a>
     <span class="bar__sep">·</span>
     <span id="bufname" class="bar__buf">— no buffer —</span>
     <span id="bufstate" class="bar__state"></span>

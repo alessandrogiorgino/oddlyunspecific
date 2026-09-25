@@ -19,9 +19,7 @@ PERMISSIONS_POLICY = ", ".join(
     f"{feature}=()"
     for feature in (
         "accelerometer",
-        "ambient-light-sensor",
         "autoplay",
-        "battery",
         "camera",
         "display-capture",
         "encrypted-media",
@@ -82,6 +80,16 @@ CSP_ADMIN = (
     "frame-ancestors 'none'; "
     "object-src 'none'"
 )
+
+if settings.DEBUG:
+    # Live-reload (django-browser-reload) injects a <script src> that spins up a
+    # Web Worker and opens an SSE stream to /__reload__/. Governed by script-,
+    # worker- and connect-src. The public policy ships none of the three; the
+    # writer one already allows script and connect but not worker. Add only
+    # what each is missing, and only in dev — production keeps the strict set.
+    CSP_PUBLIC += "; script-src 'self'; connect-src 'self'; worker-src 'self'"
+    CSP_WRITER += "; worker-src 'self'"
+
 
 NOINDEX = "noindex, nofollow, noarchive, nosnippet"
 

@@ -143,6 +143,19 @@ MIDDLEWARE = [
     "axes.middleware.AxesMiddleware",
 ]
 
+if DEBUG:
+    # Live-reload: the browser refreshes itself on a template, CSS or Python
+    # edit, so a save in the editor shows without a manual reload. Dev only —
+    # the app, its middleware, its URL (config/urls.py) and the CSP widening it
+    # needs (config/middleware.py) are all behind a DEBUG guard.
+    INSTALLED_APPS.append("django_browser_reload")
+    # After SecurityHeadersMiddleware so the CSP header is already set when the
+    # reload script is injected; before AxesMiddleware, which must stay last.
+    MIDDLEWARE.insert(
+        MIDDLEWARE.index("config.middleware.SecurityHeadersMiddleware") + 1,
+        "django_browser_reload.middleware.BrowserReloadMiddleware",
+    )
+
 ROOT_URLCONF = "config.urls"
 
 TEMPLATES = [
@@ -295,6 +308,15 @@ STORAGES = {
 # are not hashed, so the same header tells the browser to cache an unhashed
 # site.css for a year and edits stop showing up until a hard refresh.
 WHITENOISE_MAX_AGE = 0 if DEBUG else 31536000
+
+if DEBUG:
+    # runserver's own static handler wraps the WSGI app *outside* the middleware
+    # chain, so WhiteNoise never sees /static and its max-age=0 above never
+    # lands — which is why edits needed a hard refresh. Serve from the finders
+    # via WhiteNoise instead (pair with runserver --nostatic); every asset then
+    # carries WhiteNoise's revalidating header and a soft refresh shows changes.
+    WHITENOISE_AUTOREFRESH = True
+    WHITENOISE_USE_FINDERS = True
 
 # --- Uploads -----------------------------------------------------------------
 

@@ -21,3 +21,6 @@ Markdown>=3.7,<4
 Pygments>=2.18                   # server-side syntax highlighting, zero JS
 nh3>=0.2.20                      # HTML sanitiser (ammonia bindings)
 Pillow>=11                       # uploads are re-encoded through it
+
+# Dev only — inert unless DJANGO_DEBUG=1 (app, middleware, URL all DEBUG-gated)
+django-browser-reload>=1.13,<2   # browser refreshes itself on file save
