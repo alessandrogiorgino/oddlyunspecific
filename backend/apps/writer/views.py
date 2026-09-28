@@ -12,9 +12,14 @@ class ConsoleLoginView(auth_views.LoginView):
     """
     One form, three fields: username, password, second factor.
 
-    The password is checked first and the token second, so a correct password
-    with a wrong code is still a failed attempt and still feeds django-axes.
-    There is no "logged in but not verified" state to get stuck in.
+    The password is checked first and the token second, and there is no
+    "logged in but not verified" state to get stuck in.
+
+    A correct password with a wrong code counts as a failed attempt against
+    django-axes — but only because the form goes out of its way to say so.
+    Django fires `user_login_failed` from `authenticate()`, which by then has
+    already succeeded, so the OTP failure is invisible to axes unless it is
+    reported by hand. See `ConsoleAuthenticationForm._report_second_factor_failure`.
     """
 
     template_name = "writer/login.html"

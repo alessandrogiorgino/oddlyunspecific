@@ -1,3 +1,5 @@
+import re
+
 from django.contrib.auth import get_user_model
 from django.core.exceptions import ValidationError
 from django.test import TestCase
@@ -6,6 +8,10 @@ from django.utils import timezone
 
 from .models import Post, validate_slug_not_reserved
 from .rendering import render_markdown
+
+# An href or src that actually points at a data: URL — as opposed to the
+# characters "data:" sitting inertly in escaped text.
+DATA_URL_ATTRIBUTE = re.compile(r"""(?:href|src)\s*=\s*["']?\s*data:""", re.IGNORECASE)
 
 
 class RenderingTests(TestCase):
@@ -23,8 +29,22 @@ class RenderingTests(TestCase):
         self.assertNotIn("javascript:", html)
 
     def test_data_urls_are_stripped(self):
-        html = render_markdown('<a href="data:text/html,<script>1</script>">x</a>')
-        self.assertNotIn("data:text/html", html)
+        # Two routes to the same attack: markdown's own link syntax, and raw
+        # HTML pasted into a post.
+        for source in (
+            "[x](data:text/html;base64,PHNjcmlwdD4xPC9zY3JpcHQ+)",
+            '<a href="data:text/html,<script>1</script>">x</a>',
+            '<img src="data:text/html,<script>1</script>">',
+        ):
+            with self.subTest(source=source):
+                html = render_markdown(source)
+                # The assertion is about live markup rather than the substring.
+                # In the raw-HTML case the `smarty` extension curls the quotes,
+                # which breaks the tag badly enough that markdown escapes the
+                # whole thing into inert text — so "data:" can legitimately
+                # survive as characters on the page while no URL exists at all.
+                self.assertIsNone(DATA_URL_ATTRIBUTE.search(html), html)
+                self.assertNotIn("<script", html)
 
     def test_style_tags_are_stripped(self):
         html = render_markdown("<style>body{display:none}</style>text")

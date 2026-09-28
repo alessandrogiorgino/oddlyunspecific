@@ -2,7 +2,10 @@
 .env
 *.pem
 *.key
+backups/
 backup-*.sql
+backup-*.sql.gz
+backup-*.sql.gz.enc
 
 # Python
 __pycache__/

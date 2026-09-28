@@ -7,6 +7,20 @@
 # It proxies straight to this project's container, so `back_to_me_caddy` must be
 # attached to the oddlyunspecific network first (`make link-caddy` does that).
 # This project runs no Caddy of its own — same topology as WeddyPal.
+#
+# ONE EXTRA STEP, in the shared Caddy's own compose file: mount this project's
+# media volume so Caddy can serve uploaded images without waking Django.
+#
+#     services:
+#       caddy:
+#         volumes:
+#           - oddlyunspecific_media:/srv/oddlyunspecific/media:ro
+#     volumes:
+#       oddlyunspecific_media:
+#         external: true
+#
+# If you skip it nothing breaks — the `file` matcher below finds no file and
+# the request falls through to Django exactly as it used to.
 
 # www -> apex, one canonical host. Keeps ALLOWED_HOSTS and the sitemap honest.
 www.oddlyunspecific.com {
@@ -14,7 +28,6 @@ www.oddlyunspecific.com {
 }
 
 oddlyunspecific.com {
-
 	# Refuse oversized bodies before they reach Django. 12MB covers an image
 	# upload from the writer console; nothing else here needs a big body.
 	request_body {
@@ -23,13 +36,44 @@ oddlyunspecific.com {
 
 	encode zstd gzip
 
-	reverse_proxy oddlyunspecific-web-1:8000 {
-		header_up Host {host}
-		header_up X-Forwarded-Proto {scheme}
+	# Uploaded images, straight off the volume.
+	#
+	# Serving these through Django means one of gunicorn's six threads
+	# (3 workers x 2) is pinned for the whole transfer. Six people on slow
+	# connections loading a post full of photos is enough to stall the site,
+	# and it needs no malice at all. Caddy streams them without a thread.
+	#
+	# The @onvolume guard keeps the mount optional: no file, no match, and the
+	# request drops through to the reverse_proxy below, where Django's
+	# serve_media still answers.
+	handle /media/* {
+		root * /srv/oddlyunspecific
+		@onvolume file
+		header @onvolume {
+			# Filenames are a SHA-256 of the re-encoded bytes, so a given URL
+			# never changes meaning and can be cached forever.
+			Cache-Control "public, max-age=31536000, immutable"
+			X-Content-Type-Options nosniff
+			Cross-Origin-Resource-Policy same-origin
+			-Server
+		}
+		file_server @onvolume
 
-		# Caddy appends the real client IP to any X-Forwarded-For the client
-		# sent, so Django reads the LAST entry, not the first. See
-		# config/middleware.py RealClientIPMiddleware.
+		reverse_proxy oddlyunspecific-web-1:8000 {
+			header_up Host {host}
+			header_up X-Forwarded-Proto {scheme}
+		}
+	}
+
+	handle {
+		reverse_proxy oddlyunspecific-web-1:8000 {
+			header_up Host {host}
+			header_up X-Forwarded-Proto {scheme}
+
+			# Caddy appends the real client IP to any X-Forwarded-For the
+			# client sent, so Django reads the LAST entry, not the first. See
+			# config/middleware.py RealClientIPMiddleware.
+		}
 	}
 
 	# Django sets the full security header set per-path (config/middleware.py).
@@ -46,20 +90,19 @@ oddlyunspecific.com {
 	}
 }
 
-# --- If you ever turn the Cloudflare orange cloud on --------------------------
+# --- On rate limiting ---------------------------------------------------------
 #
-# 1. Set TRUSTED_PROXY=cloudflare in .env and `make prod-up`.
-# 2. Cloudflare SSL/TLS mode: Full (strict).
-# 3. Issue a Cloudflare Origin CA certificate for oddlyunspecific.com, drop the
-#    pem+key on the VPS, mount them into the shared Caddy, and replace the
-#    automatic TLS for this block with:
+# Deliberately not done here. Caddy's `rate_limit` is a third-party plugin, not
+# part of the standard build, and adding it means recompiling the ONE Caddy that
+# fronts every site on this VPS — a much bigger blast radius than the problem.
 #
-#        tls /etc/caddy/certs/oddlyunspecific.pem /etc/caddy/certs/oddlyunspecific.key
+# The limiter lives in Django instead (config/middleware.py RateLimitMiddleware,
+# tuned by RATE_LIMIT_* in settings.py). It only guards /write/, /private/ and
+# the admin path; the public blog is left alone on purpose so readers, feed
+# fetchers and crawlers can pull the whole site. It also tells a verified
+# console session apart from a prober and gives it a far larger budget — which
+# is the other reason it is not in Caddy: Caddy cannot see the session.
 #
-#    (HTTP-01 through an orange-clouded hostname is flaky; the Origin CA cert is
-#    valid 15 years and needs no ACME at all.)
-# 4. Lock the origin down so only Cloudflare can reach it — on the VPS:
-#        ufw allow from <cloudflare-range> to any port 443 proto tcp   # x each range
-#        ufw deny 443/tcp
-#    Ranges: https://www.cloudflare.com/ips/
-# 5. Remember: the IP is only hidden if EVERY domain on this VPS is proxied.
+# If the shared Caddy ever does get the plugin, the cheapest win is a per-IP
+# limit on /write/login/ — it would turn away floods one hop earlier, before a
+# Python process is involved at all.

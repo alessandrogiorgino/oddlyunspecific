@@ -10,6 +10,11 @@ re-encodes from the decoded pixels, which means:
 
 The stored filename is the SHA-256 of the *re-encoded* bytes, so a URL always
 means one specific image and can be cached forever.
+
+Order matters here. `Image.open()` parses the header and stops; `image.load()`
+is what commits memory to pixels. Every cheap check therefore happens between
+the two, because a 400KB PNG is allowed to *claim* 12000x12000 and the cost of
+believing it is ~430MB of resident memory.
 """
 
 import hashlib
@@ -17,6 +22,7 @@ import io
 
 from django.conf import settings
 from PIL import Image, UnidentifiedImageError
+from PIL.Image import DecompressionBombError
 
 SUFFIX_BY_FORMAT = {"JPEG": ".jpg", "PNG": ".png", "GIF": ".gif", "WEBP": ".webp"}
 
@@ -32,16 +38,37 @@ def store_image(uploaded_file) -> str:
         raise UploadRejected(f"file is larger than {limit}MB")
 
     raw = uploaded_file.read()
+
+    # Header only — no pixels yet. DecompressionBombError subclasses Exception
+    # directly, so it has to be named: it would walk straight past a bare
+    # (UnidentifiedImageError, OSError, ValueError) and surface as a 500.
     try:
         image = Image.open(io.BytesIO(raw))
-        image.load()
-    except (UnidentifiedImageError, OSError, ValueError) as exc:
+        width, height = image.size
+        image_format = (image.format or "").upper()
+    except (UnidentifiedImageError, DecompressionBombError, OSError, ValueError) as exc:
         raise UploadRejected("not a decodable image") from exc
 
-    image_format = (image.format or "").upper()
     if image_format not in settings.UPLOAD_ALLOWED_FORMATS:
         allowed = ", ".join(sorted(settings.UPLOAD_ALLOWED_FORMATS))
         raise UploadRejected(f"format {image_format or 'unknown'} not allowed ({allowed})")
+
+    # The byte-size cap says nothing about the decoded size: PNG and WEBP both
+    # compress a flat image by ~1000:1, so 8MB of upload can mean gigabytes of
+    # bitmap. Pillow's own guard does not raise below 179 megapixels (and only
+    # warns below 89), which is far past what this container is sized for.
+    total_pixels = width * height
+    if total_pixels > settings.UPLOAD_MAX_TOTAL_PIXELS:
+        raise UploadRejected(
+            f"image is {width}x{height} ({total_pixels // 1_000_000}MP); the limit "
+            f"is {settings.UPLOAD_MAX_TOTAL_PIXELS // 1_000_000}MP"
+        )
+
+    # Only now is it worth decoding.
+    try:
+        image.load()
+    except (DecompressionBombError, OSError, ValueError) as exc:
+        raise UploadRejected("not a decodable image") from exc
 
     limit = settings.UPLOAD_MAX_PIXELS
     if max(image.size) > limit:

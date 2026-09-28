@@ -1,0 +1,29 @@
+# GENERATED — do not hand-edit. Run `make freeze` after changing
+# requirements.txt. See that file for why this one exists.
+#
+# Resolved on Python 3.12 (the image's interpreter — see Dockerfile)
+# on 2026-09-28.
+
+argon2-cffi==25.1.0
+argon2-cffi-bindings==26.1.0
+asgiref==3.12.1
+cffi==2.1.1
+cryptography==50.0.1
+dj-database-url==2.3.0
+Django==5.2.17
+django-axes==8.3.1
+django-otp==1.7.3
+gunicorn==23.0.0
+Markdown==3.11
+nh3==0.3.7
+packaging==26.3
+pillow==12.3.0
+psycopg==3.3.6
+psycopg-binary==3.3.6
+pycparser==3.0
+Pygments==2.21.0
+python-dotenv==1.2.3
+qrcode==8.2
+sqlparse==0.6.0
+typing_extensions==4.16.0
+whitenoise==6.12.0

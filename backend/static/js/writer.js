@@ -91,6 +91,16 @@
       if (response.status === 403 || response.redirected) {
         throw new Error("session expired — reload and authenticate again");
       }
+      if (response.status === 429) {
+        /* The limiter answers text/plain, so this has to be caught before the
+           json() below turns it into "server returned 429". Tagged, because
+           callers that stay quiet about a transient failure still need to
+           speak up about this one — it persists until the window rolls over. */
+        var retry = response.headers.get("Retry-After") || "60";
+        var limited = new Error("rate limited — retry in " + retry + "s");
+        limited.rateLimited = true;
+        throw limited;
+      }
       return response.json().catch(function () {
         throw new Error("server returned " + response.status);
       }).then(function (data) {
@@ -517,7 +527,12 @@
     if (els.side.hidden) { return; }
     clearTimeout(previewTimer);
     previewTimer = setTimeout(function () {
-      renderPreview().catch(function () { /* keep typing; the log stays quiet */ });
+      renderPreview().catch(function (error) {
+        /* A blip mid-sentence is not worth a line in the log. Being rate
+           limited is: the pane would otherwise just stop updating, and a
+           preview that quietly stops previewing is worse than an error. */
+        if (error && error.rateLimited) { warn("preview paused · " + error.message); }
+      });
     }, 400);
   }
 

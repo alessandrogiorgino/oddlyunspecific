@@ -1,6 +1,34 @@
+# Every service here is capped on memory, CPU, processes and log size.
+#
+# This box is shared with the other projects (detoxy, weddypal, paupernopaper)
+# and shares one kernel with them. An uncapped container does not fail on its
+# own — it takes the host's memory down to the point where the OOM killer picks
+# a victim, and the victim is whatever happens to be largest, not whatever
+# happens to be at fault. Likewise an uncapped json-file log driver: the default
+# has no max-size at all, so Django's stdout grows until the partition is full
+# and then *every* site on the VPS stops writing.
+#
+# The numbers assume a small blog with one writer. Raise them if `docker stats`
+# says so; do not remove them.
+
+x-logging: &logging
+  driver: "json-file"
+  options:
+    max-size: "10m"
+    max-file: "5"
+
 services:
   db:
     image: postgres:16-alpine
+    logging: *logging
+    # Postgres with the stock shared_buffers (128MB) plus work_mem for a site
+    # whose largest query returns a few hundred rows.
+    mem_limit: 512m
+    memswap_limit: 512m  # == mem_limit, so the container cannot escape into swap
+    cpus: 1.0
+    pids_limit: 128
+    # Give it time to checkpoint instead of being killed mid-write.
+    stop_grace_period: 30s
     environment:
       POSTGRES_USER: ${DB_USER:-oddly}
       POSTGRES_PASSWORD: ${DB_PASSWORD:?set DB_PASSWORD}
@@ -21,7 +49,22 @@ services:
       retries: 5
 
   web:
+    # Explicit, so a `docker compose build` from the dev file cannot overwrite
+    # the production image — see the note in docker-compose.yml.
+    image: oddlyunspecific-web-prod
     build: ./backend
+    logging: *logging
+    # Three gunicorn workers idle around 70MB each. 768m leaves headroom for
+    # the worst legitimate request — re-encoding a 30 megapixel upload, which
+    # peaks near 180MB (see UPLOAD_MAX_TOTAL_PIXELS in settings.py).
+    mem_limit: 768m
+    memswap_limit: 768m
+    cpus: 1.5
+    pids_limit: 256
+    # If the *host* runs out, take this container before Postgres or another
+    # project: a web worker restarting is a blip, a database being killed
+    # mid-write is not.
+    oom_score_adj: 500
     expose:
       - "8000"
     environment:
@@ -73,3 +116,7 @@ services:
 volumes:
   pgdata:
   media:
+    # Pinned name, not the compose-generated one: the shared Caddy mounts this
+    # volume read-only to serve /media/* itself, and that mount is written in a
+    # file this repo does not own. See ./Caddyfile.
+    name: oddlyunspecific_media

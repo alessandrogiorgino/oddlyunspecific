@@ -1,0 +1,13 @@
+# Development-only packages. NOT installed in the production image.
+#
+# django-browser-reload used to live in requirements.txt and was inert in
+# production — the app, its middleware and its URL are all behind a DEBUG
+# guard. Inert is not the same as absent: it was still code shipped to the
+# public-facing image, still a package to patch, still a line in the supply
+# chain. Dev builds pass INSTALL_DEV=1 (see docker-compose.yml) and get it;
+# prod builds never see this file.
+
+-r requirements.txt
+
+django-browser-reload>=1.13,<2   # browser refreshes itself on file save
+pip-audit>=2.7                   # `make audit` — CVE check against the lock

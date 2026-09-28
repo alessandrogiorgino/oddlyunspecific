@@ -18,7 +18,17 @@ services:
       retries: 10
 
   web:
-    build: ./backend
+    # Distinct tag from the production one. Both compose files live in the same
+    # directory and both call their service `web`, so without this they build
+    # to the same image name and the last one run silently overwrites the
+    # other — which now matters, because the two images differ.
+    image: oddlyunspecific-web-dev
+    build:
+      context: ./backend
+      args:
+        # Pulls in requirements-dev.txt: live-reload and pip-audit. The prod
+        # compose file does not set this, so neither ships to the VPS.
+        INSTALL_DEV: "1"
     # --nostatic: let WhiteNoise serve /static so its no-cache header lands and
     # edits show on a soft refresh (see WHITENOISE_USE_FINDERS in settings).
     command: ["python", "manage.py", "runserver", "--nostatic", "0.0.0.0:8000"]

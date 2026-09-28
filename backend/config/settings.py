@@ -97,10 +97,26 @@ if DEBUG:
 # Where the Django admin is mounted. Not /admin/ — every scanner on the
 # internet probes that path within minutes of a domain going live.
 ADMIN_PATH = env("DJANGO_ADMIN_PATH", "admin").strip("/")
+if not DEBUG:
+    # The obvious failure is copying .env.example verbatim, which would mount
+    # the admin at a path published in this repository — a secret that is only
+    # a secret until someone reads the file it is written in.
+    if ADMIN_PATH in ("admin", "console-7f3a2b") or ADMIN_PATH.startswith("change-me"):
+        raise ImproperlyConfigured(
+            f"DJANGO_ADMIN_PATH is {ADMIN_PATH!r} — that is either the default, "
+            "or the placeholder committed to .env.example. Both are public. "
+            "Run `make secrets` for a fresh one."
+        )
 
 # Which proxy, if any, is allowed to tell us the client's real IP. Getting this
-# wrong means brute-force lockouts ban the proxy instead of the attacker.
+# wrong means brute-force lockouts ban the proxy instead of the attacker, so a
+# typo here is a silent security hole — hence the allowlist rather than a
+# fallback to "none".
 TRUSTED_PROXY = env("TRUSTED_PROXY", "caddy" if not DEBUG else "none")
+if TRUSTED_PROXY not in ("caddy", "none"):
+    raise ImproperlyConfigured(
+        f"TRUSTED_PROXY must be 'caddy' or 'none', not {TRUSTED_PROXY!r}."
+    )
 
 # --- Applications ------------------------------------------------------------
 
@@ -136,6 +152,12 @@ MIDDLEWARE = [
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     # Populates request.user.is_verified() — the second factor check.
     "django_otp.middleware.OTPMiddleware",
+    # Directly after OTPMiddleware, because it needs to know whether the
+    # request carries a verified session: the author's own console gets a much
+    # larger budget than an anonymous prober. Still before the views, so a
+    # refused request never reaches one. An anonymous flood costs nothing extra
+    # by sitting here — no session cookie means no session query.
+    "config.middleware.RateLimitMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
     "config.middleware.SecurityHeadersMiddleware",
@@ -189,6 +211,53 @@ DATABASES = {
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
+# --- Cache -------------------------------------------------------------------
+
+# Postgres, not locmem. The only thing in here is the rate-limiter's counters,
+# and locmem would give each of the three gunicorn workers its own copy — an
+# advertised limit of 60/min would really be 180/min, and it would reset on
+# every worker recycle. The table is created by `manage.py createcachetable`,
+# which entrypoint.sh runs on every boot (it is idempotent).
+CACHES = {
+    "default": {
+        "BACKEND": "django.core.cache.backends.db.DatabaseCache",
+        "LOCATION": "django_cache",
+        "TIMEOUT": 300,
+        "OPTIONS": {"MAX_ENTRIES": 5000, "CULL_FREQUENCY": 4},
+    }
+}
+if DEBUG:
+    CACHES = {"default": {"BACKEND": "django.core.cache.backends.locmem.LocMemCache"}}
+
+# --- Rate limiting -----------------------------------------------------------
+
+# A ceiling on how fast one address may hit the private surfaces at all,
+# independent of whether the credentials are right. django-axes only counts
+# *failed logins*; this also covers hammering the login page, probing for the
+# admin path and replaying the JSON API.
+RATE_LIMIT_ENABLED = env_bool("RATE_LIMIT_ENABLED", not DEBUG)
+
+# Anonymous, or logged in without a second factor: a prober.
+RATE_LIMIT_REQUESTS = int(env("RATE_LIMIT_REQUESTS", "60"))
+RATE_LIMIT_WINDOW_SECONDS = int(env("RATE_LIMIT_WINDOW_SECONDS", "60"))
+
+# Tighter budget for the two endpoints that actually check a password. No
+# verified session exists during a login, so this one always applies.
+RATE_LIMIT_LOGIN_REQUESTS = int(env("RATE_LIMIT_LOGIN_REQUESTS", "10"))
+RATE_LIMIT_LOGIN_WINDOW_SECONDS = int(env("RATE_LIMIT_LOGIN_WINDOW_SECONDS", "300"))
+
+# A verified staff session — the author, at the console. Generous, because the
+# console is chatty by design and throttling the writing tool is the wrong
+# trade: live preview is debounced at 400ms (static/js/writer.js), so a writer
+# who pauses once a second legitimately produces ~60 requests a minute, right
+# at the anonymous budget. Autosave adds 3/min on top.
+#
+# Not unlimited, though. This is what catches a runaway client — a loop in
+# writer.js retrying forever would pin a gunicorn thread, and no human reaches
+# 600/min with a 400ms debounce (the ceiling is 150).
+RATE_LIMIT_VERIFIED_REQUESTS = int(env("RATE_LIMIT_VERIFIED_REQUESTS", "600"))
+RATE_LIMIT_VERIFIED_WINDOW_SECONDS = int(env("RATE_LIMIT_VERIFIED_WINDOW_SECONDS", "60"))
+
 # --- Authentication ----------------------------------------------------------
 
 AUTH_USER_MODEL = "accounts.User"
@@ -227,9 +296,19 @@ LOGOUT_REDIRECT_URL = "blog:post_list"
 
 # --- django-axes: brute-force lockout ----------------------------------------
 
-# Lock on IP and on username independently, so a spray across many usernames
-# from one IP and a spray at one username from many IPs are both caught.
-AXES_LOCKOUT_PARAMETERS = [["ip_address"], ["username"]]
+# Lock on IP only, deliberately.
+#
+# Locking on username as well looks strictly safer and is not: this site has
+# exactly one account, so a stranger who guesses the username can keep it
+# locked from rotating addresses, five requests at a time, forever — a
+# permanent denial of service against the owner, handed out for free. The thing
+# that rule was meant to stop (a distributed spray at one username) cannot
+# actually log in here, because a correct password still needs a TOTP code, and
+# wrong codes now land on this same ledger (apps/writer/forms.py).
+#
+# The spray is still *visible*: AXES_ENABLE_ACCESS_FAILURE_LOG records every
+# attempt regardless of whether it tripped a lockout.
+AXES_LOCKOUT_PARAMETERS = [["ip_address"]]
 AXES_FAILURE_LIMIT = 5
 AXES_COOLOFF_TIME = timedelta(minutes=30)
 AXES_RESET_ON_SUCCESS = True
@@ -323,8 +402,18 @@ if DEBUG:
 # Every upload is decoded and re-encoded by Pillow before it touches disk, so a
 # polyglot file (valid JPEG *and* valid script) cannot survive the round trip.
 UPLOAD_MAX_BYTES = 8 * 1024 * 1024
-UPLOAD_MAX_PIXELS = 6000
+UPLOAD_MAX_PIXELS = 6000  # longest side; anything bigger is downscaled to it
 UPLOAD_ALLOWED_FORMATS = {"JPEG", "PNG", "GIF", "WEBP"}
+
+# Hard ceiling on width*height, checked from the header *before* Pillow decodes
+# anything (apps/writer/uploads.py). Compressed bytes are no guide: a 400KB PNG
+# can declare 12000x12000 and cost ~430MB resident the moment it is loaded.
+#
+# 30MP covers any camera someone writes a blog from (a full-frame DSLR is 24MP)
+# and peaks around 180MB while re-encoding — the original bitmap plus the
+# converted copy — which fits inside the container's 768MB limit with room for
+# the other two gunicorn workers.
+UPLOAD_MAX_TOTAL_PIXELS = 30_000_000
 
 # --- Locale ------------------------------------------------------------------
 

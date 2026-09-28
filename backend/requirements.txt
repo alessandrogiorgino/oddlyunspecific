@@ -1,5 +1,12 @@
-# Ranges, not exact pins: a rebuild picks up security patches inside the same
-# minor. Run `make freeze` to lock exact versions once the stack is live.
+# The DIRECT production dependencies, as ranges — this file is the declaration
+# of intent, kept readable on purpose.
+#
+# It is not what gets installed. The image builds from requirements.lock.txt,
+# which pins every package and every transitive dependency to an exact version,
+# so two builds a month apart produce the same thing and a compromised upstream
+# release cannot arrive unannounced on the next `make upgrade`.
+#
+# Change a range here, then run `make freeze` to regenerate the lock.
 
 # Core
 Django>=5.2,<5.3                 # 5.2 is the LTS line
@@ -21,6 +28,3 @@ Markdown>=3.7,<4
 Pygments>=2.18                   # server-side syntax highlighting, zero JS
 nh3>=0.2.20                      # HTML sanitiser (ammonia bindings)
 Pillow>=11                       # uploads are re-encoded through it
-
-# Dev only — inert unless DJANGO_DEBUG=1 (app, middleware, URL all DEBUG-gated)
-django-browser-reload>=1.13,<2   # browser refreshes itself on file save

@@ -15,6 +15,15 @@ echo "[entrypoint] postgres up."
 # not have.
 python manage.py migrate --noinput
 
+# The rate limiter's counters live in Postgres so the three gunicorn workers
+# share them. Idempotent — it prints "already exists" and carries on.
+python manage.py createcachetable
+
+# Sessions are rows, and expired ones are never collected on their own. One
+# writer means this is a handful of rows either way, but "either way" is how a
+# table nobody looks at becomes a table nobody can vacuum.
+python manage.py clearsessions
+
 # Fail loudly on a misconfigured deployment instead of serving an insecure site.
 if [ "$DJANGO_DEBUG" != "1" ]; then
   python manage.py check --deploy --fail-level WARNING

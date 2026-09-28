@@ -1,5 +1,11 @@
+# INSTALL_DEV=1 adds requirements-dev.txt (live-reload, pip-audit). The dev
+# compose file sets it; production never does, so those packages are absent
+# from the image rather than merely unreachable.
+ARG INSTALL_DEV=0
+
 # Build stage: wheels only, so the runtime image has no compiler in it.
 FROM python:3.12-slim AS build
+ARG INSTALL_DEV
 
 ENV PIP_NO_CACHE_DIR=1
 
@@ -8,12 +14,16 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /wheels
-COPY requirements.txt .
-RUN pip wheel --wheel-dir /wheels -r requirements.txt
+# The LOCK file, not requirements.txt: every version pinned, transitive ones
+# included, so this build resolves to the same bytes as the last one.
+COPY requirements.lock.txt requirements.txt requirements-dev.txt ./
+RUN pip wheel --wheel-dir /wheels -r requirements.lock.txt \
+    && if [ "$INSTALL_DEV" = "1" ]; then pip wheel --wheel-dir /wheels -r requirements-dev.txt; fi
 
 
 # Runtime stage.
 FROM python:3.12-slim
+ARG INSTALL_DEV
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
@@ -28,8 +38,15 @@ RUN apt-get update && apt-get install -y --no-install-recommends libpq5 \
 WORKDIR /app
 
 COPY --from=build /wheels /wheels
-COPY requirements.txt .
-RUN pip install --no-index --find-links=/wheels -r requirements.txt && rm -rf /wheels
+COPY requirements.lock.txt requirements.txt requirements-dev.txt ./
+# --no-index: install from the wheels built above and nothing else. If the lock
+# and the wheel set ever disagree, the build fails here instead of quietly
+# reaching out to PyPI.
+RUN pip install --no-index --find-links=/wheels -r requirements.lock.txt \
+    && if [ "$INSTALL_DEV" = "1" ]; then \
+         pip install --no-index --find-links=/wheels -r requirements-dev.txt; \
+       fi \
+    && rm -rf /wheels
 
 COPY . .
 
