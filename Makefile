@@ -167,6 +167,13 @@ upgrade: ## Pull, rebuild and restart the prod stack
 
 prod-up: ## Build and start the prod stack detached (needs .env)
 	$(PROD) up --build -d
+	@# Always re-link, exactly as `deploy` and `upgrade` do. Recreating the web
+	@# container can recreate the network, which silently drops the shared Caddy
+	@# off it — and the only symptom is a 502 with an empty body on every
+	@# request. `link-caddy` is a no-op when the link is already there, so the
+	@# cost of doing it unconditionally is one `docker network connect` that
+	@# prints "already on".
+	@$(MAKE) link-caddy
 
 prod-down: ## Stop the prod stack
 	$(PROD) down

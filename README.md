@@ -736,6 +736,24 @@ cannot decrypt.
 Python field. Use `make backup`. And note `docker compose down -v` deletes the
 media volume — uploads are not in the SQL dump.)
 
+**502 with an empty body, from Caddy.** Almost always the same cause: something
+recreated the web container, which recreated the network, which silently
+dropped the shared Caddy off it. Nothing logs this — the app is healthy, Caddy
+is healthy, and they cannot see each other.
+
+```bash
+make prod-ps      # web should be Up (healthy). If it is not, it is .env: make prod-tail
+make link-caddy   # re-attach; it is a no-op when already linked
+```
+
+`deploy`, `upgrade` and `prod-up` all re-link on their own. Recreating the
+*shared* Caddy container (`docker compose up -d caddy` in back_to_me) does not,
+and drops **every** proxied site at once — record its networks first:
+
+```bash
+docker inspect back_to_me_caddy -f '{{range $k,$v := .NetworkSettings.Networks}}{{$k}} {{end}}'
+```
+
 **Locked yourself out** (5 bad attempts — wrong password *or* wrong TOTP code,
 they share one budget): wait 30 minutes, or
 

@@ -28,24 +28,14 @@ www.oddlyunspecific.com {
 }
 
 oddlyunspecific.com {
-	# Refuse oversized bodies before they reach Django. 12MB covers an image
-	# upload from the writer console; nothing else here needs a big body.
+
 	request_body {
 		max_size 12MB
 	}
 
 	encode zstd gzip
 
-	# Uploaded images, straight off the volume.
-	#
-	# Serving these through Django means one of gunicorn's six threads
-	# (3 workers x 2) is pinned for the whole transfer. Six people on slow
-	# connections loading a post full of photos is enough to stall the site,
-	# and it needs no malice at all. Caddy streams them without a thread.
-	#
-	# The @onvolume guard keeps the mount optional: no file, no match, and the
-	# request drops through to the reverse_proxy below, where Django's
-	# serve_media still answers.
+
 	handle /media/* {
 		root * /srv/oddlyunspecific
 		@onvolume file
@@ -76,18 +66,18 @@ oddlyunspecific.com {
 		}
 	}
 
-	# Django sets the full security header set per-path (config/middleware.py).
-	# Caddy only removes its own fingerprint.
+
 	header {
 		-Server
 	}
 
-	log {
-		output file /var/log/caddy/oddlyunspecific.log {
-			roll_size 10MB
-			roll_keep 5
-		}
-	}
+
+	#     log {
+	#         output file /var/log/caddy/oddlyunspecific.log {
+	#             roll_size 10MB
+	#             roll_keep 5
+	#         }
+	#     }
 }
 
 # --- On rate limiting ---------------------------------------------------------
