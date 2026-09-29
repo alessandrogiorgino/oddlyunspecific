@@ -14,6 +14,7 @@ urlpatterns = [
     path("api/posts/<int:pk>/", api.post_detail, name="api_post_detail"),
     path("api/posts/<int:pk>/publish/", api.post_publish, name="api_post_publish"),
     path("api/posts/<int:pk>/unpublish/", api.post_unpublish, name="api_post_unpublish"),
+    path("api/posts/<int:pk>/privatize/", api.post_privatize, name="api_post_privatize"),
     path("api/journal/", api.journal, name="api_journal"),
     path("api/journal/<int:pk>/", api.journal_detail, name="api_journal_detail"),
     path("api/preview/", api.preview, name="api_preview"),

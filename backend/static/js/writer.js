@@ -25,7 +25,11 @@
     sidebody: document.getElementById("sidebody"),
     sideclose: document.getElementById("sideclose"),
     previewtab: document.getElementById("previewtab"),
-    home: document.getElementById("home")
+    home: document.getElementById("home"),
+    helpbtn: document.getElementById("helpbtn"),
+    helpmodal: document.getElementById("helpmodal"),
+    helpbody: document.getElementById("helpbody"),
+    helpclose: document.getElementById("helpclose")
   };
 
   /* Label the shortcuts the way this keyboard actually spells them. */
@@ -180,27 +184,70 @@
     names.forEach(function (name, index) {
       commands[name] = { run: run, help: index === 0 ? help : null, name: name };
     });
+    // Hung off the primary entry so the help output can print "open / o" without
+    // a second list of aliases to keep in step.
+    commands[names[0]].aliases = names.slice(1);
   }
 
-  define(["help", "?"], "this list", function () {
-    var rows = [];
-    Object.keys(commands).forEach(function (key) {
-      if (commands[key].help) { rows.push([key, commands[key].help]); }
+  var KEYS = [
+    [MOD + "s", "save"],
+    [MOD + "enter", "save and publish"],
+    [MOD + "p", "toggle the live preview"],
+    [MOD + "k", "focus the command line"],
+    [MOD + "/", "open this panel"],
+    ["esc", "move between command line and editor · close the panel"],
+    [MOD + "b", "bold — wraps the selection, press again to remove"],
+    [MOD + "i", "italic"],
+    [MOD + "e", "inline code"],
+    ["tab", "complete a command name"],
+    ["↑ / ↓", "walk the command history"],
+    ["drop / paste", "upload an image and insert it at the cursor"],
+    ["preview ⤢ icon", "tap an image's corner icon to cycle its size — or `resize <px>`"]
+  ];
+
+  /* Headings and order for the help output, in the prompt and in the ? panel
+     alike. This names commands, it does not define them: the label and the text
+     of every row come out of the registry, and anything missing from here still
+     prints, under "other". So a command added below can end up in the wrong
+     group, but it can never end up invisible. */
+  var GROUPS = [
+    ["posts", ["ls", "new", "open", "w", "pub", "unpub", "slug", "summary", "tags", "rm"]],
+    ["private", ["j", "mv"]],
+    ["writing", ["prev", "resize", "view"]],
+    ["session", ["stat", "whoami", "admin", "close", "clear", "logout", "help"]]
+  ];
+
+  function helpGroups() {
+    var claimed = {};
+    var groups = GROUPS.map(function (group) {
+      var names = group[1].filter(function (name) {
+        if (!commands[name] || !commands[name].help) { return false; }
+        claimed[name] = true;
+        return true;
+      });
+      return [group[0], names];
     });
-    table(rows);
-    line("", "ok");
-    table([
-      [MOD + "s", "save"],
-      [MOD + "enter", "save and publish"],
-      [MOD + "p", "toggle the live preview"],
-      [MOD + "k", "focus the command line"],
-      ["esc", "move between command line and editor"],
-      [MOD + "b", "bold — wraps the selection, press again to remove"],
-      [MOD + "i", "italic"],
-      [MOD + "e", "inline code"],
-      ["drop / paste", "upload an image and insert it at the cursor"],
-      ["preview ⤢ icon", "tap an image's corner icon to cycle its size — or `resize <px>`"]
-    ]);
+    var rest = Object.keys(commands).filter(function (name) {
+      return commands[name].help && !claimed[name];
+    });
+    if (rest.length) { groups.push(["other", rest]); }
+    return groups.filter(function (group) { return group[1].length; });
+  }
+
+  function helpRows(names) {
+    return names.map(function (name) {
+      var entry = commands[name];
+      return [[name].concat(entry.aliases).join(" / "), entry.help];
+    });
+  }
+
+  define(["help", "?"], "this list — also the ? button, top right", function () {
+    helpGroups().forEach(function (group) {
+      say("— " + group[0], "in");
+      table(helpRows(group[1]));
+    });
+    say("— keys", "in");
+    table(KEYS);
   });
 
   define(["ls"], "list posts — `ls drafts` / `ls published`", function (args) {
@@ -303,6 +350,28 @@
       .then(function (data) {
         buf = Object.assign(buf, data.post);
         ok("tags · " + (buf.tags.join(", ") || "none"));
+      }).catch(fail);
+  });
+
+  define(["mv"], "move a post into the journal — `mv <id> !`", function (args) {
+    if (args[1] !== "!") {
+      return warn("this deletes the post and recreates it as a private entry — "
+        + "slug, summary and tags are lost. confirm: `mv " + (args[0] || "<id>") + " !`");
+    }
+    return api("posts/" + encodeURIComponent(args[0]) + "/privatize/", { method: "POST" })
+      .then(function (data) {
+        if (buf && buf.kind === "post" && String(buf.id) === String(args[0])) {
+          buf = Object.assign({ kind: "journal" }, data.entry);
+          paint();
+        }
+        ok("moved → " + data.entry.url);
+        if (data.was_published) {
+          warn("the old public URL now 404s — and it may sit in caches and feed readers");
+        }
+        if (data.media_refs) {
+          warn(data.media_refs + " image URL(s) in the body stay publicly fetchable — "
+            + "/media/ is served without a session check");
+        }
       }).catch(fail);
   });
 
@@ -521,6 +590,52 @@
     els.previewtab.hidden = !els.side.hidden;
   }
 
+  /* ------------------------------------------------------------- help panel */
+
+  /* Same rows `help` prints, laid out as a panel for the mouse. Built on open
+   * rather than at boot: it costs nothing and cannot go stale. */
+
+  function ticks(text) {
+    /* The help strings write their examples in backticks, the way they read in
+       the log. Escape first and promote the pairs second — the other order
+       would let the text escape the tag it is about to be wrapped in. */
+    return esc(text).replace(/`([^`]+)`/g, "<code>$1</code>");
+  }
+
+  function buildHelp() {
+    var html = "";
+    helpGroups().concat([["keys", null]]).forEach(function (group) {
+      var rows = group[1] === null ? KEYS : helpRows(group[1]);
+      html += '<p class="modal__group">' + esc(group[0]) + "</p><table>";
+      rows.forEach(function (row) {
+        html += "<tr><td>" + esc(row[0]) + "</td><td>" + ticks(row[1]) + "</td></tr>";
+      });
+      html += "</table>";
+    });
+    html += '<p class="modal__hint">'
+      + ticks("`!` is the confirmation on `rm`, `j rm` and `mv` — nothing that "
+        + "destroys or moves writing runs without it.")
+      + "</p>";
+    els.helpbody.innerHTML = html;
+  }
+
+  var helpReturn = null;
+
+  function openHelp() {
+    buildHelp();
+    els.helpmodal.hidden = false;
+    // Where the focus came from, so closing puts it back — usually the command
+    // line, which is where a keyboard user was before reaching for the button.
+    helpReturn = document.activeElement;
+    els.helpclose.focus();
+  }
+
+  function closeHelp() {
+    els.helpmodal.hidden = true;
+    (helpReturn && helpReturn.focus ? helpReturn : els.cmd).focus();
+    helpReturn = null;
+  }
+
   /* Debounced: one render per pause in typing, not one per keystroke. The
    * markdown is rendered server-side, so each refresh is a round trip. */
   function schedulePreview() {
@@ -676,6 +791,25 @@
     });
   });
 
+  els.helpbtn.addEventListener("click", openHelp);
+  els.helpclose.addEventListener("click", closeHelp);
+
+  /* Backdrop only: a click on the card itself must not close it, or selecting a
+     command name to copy would dismiss the panel mid-drag. */
+  els.helpmodal.addEventListener("click", function (event) {
+    if (event.target === els.helpmodal) { closeHelp(); }
+  });
+
+  /* Registered before the formatting shortcuts below so escape reaches the
+     panel first: with focus inside it, the command line's own Escape handler
+     never runs anyway, but a click on the backdrop leaves focus on <body>. */
+  document.addEventListener("keydown", function (event) {
+    if (event.key === "Escape" && !els.helpmodal.hidden) {
+      closeHelp();
+      event.preventDefault();
+    }
+  });
+
   var WRAPPERS = { b: "**", i: "*", e: "`" };
 
   document.addEventListener("keydown", function (event) {
@@ -693,6 +827,7 @@
     if (event.key === "s") { event.preventDefault(); save(); }
     else if (event.key === "k") { event.preventDefault(); els.cmd.focus(); }
     else if (event.key === "p") { event.preventDefault(); run("preview"); }
+    else if (event.key === "/") { event.preventDefault(); openHelp(); }
     else if (event.key === "Enter") { event.preventDefault(); run("pub"); }
   });
 

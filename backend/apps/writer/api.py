@@ -190,6 +190,61 @@ def post_unpublish(request, pk):
     return JsonResponse({"ok": True, "post": _post_summary(post)})
 
 
+@staff_otp_required
+@require_POST
+def post_privatize(request, pk):
+    """
+    Move a post out of the public table and into the journal, in one transaction.
+
+    A copy-then-delete rather than a flag, because there is no flag: the two
+    kinds of writing are two models (see apps.journal.models.JournalEntry). The
+    atomic block matters for exactly one reason — a half-done move is either a
+    post that still answers on a public URL or a piece of writing that no longer
+    exists anywhere, and the second one is unrecoverable.
+
+    What does not survive the move: slug, summary, tags, body_html. JournalEntry
+    has no columns for them, and inventing some would mean the private table
+    starts carrying public-facing metadata.
+
+    Images are *not* moved. Uploads live under /media/, which the front proxy
+    serves straight off the volume with no session check (see Caddyfile), so any
+    image URL embedded in the body stays publicly fetchable after this runs. The
+    response reports how many the body references so the caller can say so.
+    """
+    try:
+        post = Post.objects.get(pk=pk)
+    except Post.DoesNotExist:
+        return _fail("no such post", status=404)
+
+    was_published = post.is_published
+    # Keep the reading order the journal already sorts by: a post that was
+    # public on some date belongs on that date, not on the day it was hidden.
+    entry_date = (
+        timezone.localtime(post.published_at).date()
+        if post.published_at
+        else timezone.localtime(post.created_at).date()
+    )
+
+    with transaction.atomic():
+        entry = JournalEntry.objects.create(
+            title=post.title,
+            body=post.body,
+            entry_date=entry_date,
+            author=request.user,
+        )
+        post.delete()
+
+    return JsonResponse(
+        {
+            "ok": True,
+            "entry": _entry_detail(entry),
+            "was_published": was_published,
+            "media_refs": post.body.count("/media/"),
+        },
+        status=201,
+    )
+
+
 # --- Journal -----------------------------------------------------------------
 
 

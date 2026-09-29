@@ -221,6 +221,105 @@ a.bar__id:hover { text-decoration: underline; }
 .pane__body table { width: 100%; border-collapse: collapse; }
 .pane__body th, .pane__body td { border-bottom: 1px solid var(--t-rule); padding: .3rem .4rem; text-align: left; }
 
+/* --- help modal ---------------------------------------------------------- */
+
+.bar__help {
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  width: 1.35rem;
+  height: 1.35rem;
+  padding: 0;
+  background: transparent;
+  border: 1px solid var(--t-rule);
+  border-radius: 50%;
+  color: var(--t-dim);
+  font: inherit;
+  font-size: 11px;
+  line-height: 1;
+  cursor: pointer;
+}
+.bar__help:hover, .bar__help:focus-visible {
+  color: var(--t-accent);
+  border-color: var(--t-accent);
+}
+
+.modal {
+  /* The gap around the card, as a variable because the card's max-height has to
+     subtract it: a percentage cannot do that job here (see below). */
+  --modal-gap: 1.5rem;
+
+  position: fixed;
+  inset: 0;
+  /* dvh, not the 100% of `inset: 0`: on a phone the fixed viewport sits behind
+     the browser's own toolbars, which is exactly where the bottom of a
+     full-height card would go. Over-constrained with `bottom`, so height wins. */
+  height: 100dvh;
+  z-index: 10;
+  display: grid;
+  place-items: center;
+  padding: var(--modal-gap);
+  /* Same near-black as the page, at 3/4: the console stays legible behind the
+     card, which is the point — this is a reference, not a context switch. */
+  background: rgba(11, 12, 11, .76);
+}
+
+/* Grid, not flex, for the head/body split: `minmax(0, 1fr)` caps the scrolling
+   row at the space left over. A flex column would give the body
+   `min-height: auto` instead, so it would grow to its content and push the end
+   of the list past the bottom of the card rather than scrolling inside it. */
+.modal__card {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  width: min(46rem, 100%);
+  /* 90dvh, so the card reads as a panel over the console rather than as a
+     second screen — the log and the prompt stay visible under it. The calc is
+     the floor for short windows, where 90dvh would leave less room than the
+     gap itself.
+
+     Measured against the viewport either way, never `max-height: 100%`: that
+     percentage resolves against this item's grid area — an implicit `auto` row,
+     which sizes to the card's own content and so overflows the fixed-height
+     container instead of clamping it. The card then ran off the bottom of the
+     screen with nothing to scroll. */
+  max-height: min(90dvh, calc(100dvh - var(--modal-gap) * 2));
+  background: var(--t-panel);
+  border: 1px solid var(--t-rule);
+  box-shadow: 0 18px 44px rgba(0, 0, 0, .55);
+}
+
+.modal__body {
+  min-height: 0;
+  overflow-y: auto;
+  /* The console behind is `overflow: hidden`, but a phone still rubber-bands
+     the page when this list hits its end. */
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  padding: .6rem 1.1rem 1.2rem;
+  font-size: 12px;
+}
+
+/* Bigger than the preview pane's ×, because this one gets tapped. */
+.modal__card .ghost { padding: .1rem .45rem; font-size: 15px; }
+
+.modal__group {
+  margin: 1.2rem 0 .35rem;
+  color: var(--t-accent);
+  font-size: 11px;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+}
+.modal__group:first-child { margin-top: .5rem; }
+
+.modal table { border-collapse: collapse; width: 100%; }
+.modal td { padding: .12rem .9rem .12rem 0; vertical-align: top; }
+/* The command column shrinks to its text, so the descriptions all start on the
+   same column and the table reads like the log's output does. */
+.modal td:first-child { width: 1%; white-space: nowrap; color: var(--t-fg); }
+.modal td + td { color: var(--t-dim); }
+.modal code { color: var(--t-fg); background: #0a0b0a; padding: .05em .3em; }
+.modal__hint { color: var(--t-dim); margin: 1.4rem 0 0; }
+
 /* --- login --------------------------------------------------------------- */
 
 .term--login { display: grid; place-items: center; overflow: auto; }
@@ -266,6 +365,22 @@ a.bar__id:hover { text-decoration: underline; }
 
 @media (max-width: 40rem) {
   .pane--side { position: fixed; inset: 0; flex: none; z-index: 5; }
+  /* Full-bleed on a phone: a centred card with margins would leave the list
+     scrolling inside a box inside a scroll. */
+  .modal { --modal-gap: 0rem; }
+  /* max-height back to the full screen, or the 90dvh cap above would leave a
+     strip of backdrop under a card that is meant to be edge to edge here. */
+  .modal__card { width: 100%; height: 100dvh; max-height: 100dvh; border: 0; }
+  /* Two columns do not fit: the command names cannot wrap (they are `nowrap`,
+     and a shortcut broken across lines is unreadable), so the description
+     column would be squeezed to a few characters. One row per command, name
+     over description. */
+  .modal tr, .modal td { display: block; }
+  .modal td { padding: 0; }
+  .modal td:first-child { width: auto; }
+  .modal td + td { padding-bottom: .55rem; }
+  /* Clear of the home bar / gesture area, so the last row is reachable. */
+  .modal__body { padding-bottom: calc(1.2rem + env(safe-area-inset-bottom)); }
   .login form { grid-template-columns: 1fr; }
   .login button { grid-column: 1; }
 }

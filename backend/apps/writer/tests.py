@@ -18,12 +18,14 @@ from django.core.files.uploadedfile import SimpleUploadedFile
 from django.db.utils import OperationalError
 from django.test import TestCase, override_settings
 from django.urls import reverse
+from django.utils import timezone
 from django_otp.oath import TOTP
 from django_otp.plugins.otp_static.models import StaticDevice, StaticToken
 from django_otp.plugins.otp_totp.models import TOTPDevice
 from PIL import Image
 
 from apps.blog.models import Post
+from apps.journal.models import JournalEntry
 from apps.journal.tests import verified_login
 from config.middleware import RealClientIPMiddleware
 
@@ -118,6 +120,10 @@ class ApiAccessTests(TestCase):
         # The console is the only page allowed to run script, and only its own.
         self.assertIn("script-src 'self'", response["Content-Security-Policy"])
         self.assertNotIn("unsafe-inline", response["Content-Security-Policy"])
+        # The help panel and the button that opens it. Its contents are built by
+        # writer.js, so the markup is all there is to assert here.
+        self.assertContains(response, 'id="helpbtn"')
+        self.assertContains(response, 'id="helpmodal"')
 
     def test_login_page_renders_and_asks_for_three_fields(self):
         response = self.client.get(reverse("writer:login"))
@@ -217,6 +223,48 @@ class ApiBehaviourTests(TestCase):
         self.assertTrue(Post.objects.get(pk=post["id"]).is_published)
         self.client.post(reverse("writer:api_post_unpublish", args=[post["id"]]))
         self.assertFalse(Post.objects.get(pk=post["id"]).is_published)
+
+    def privatize(self, post_id):
+        response = self.client.post(
+            reverse("writer:api_post_privatize", args=[post_id])
+        )
+        self.assertEqual(response.status_code, 201)
+        return response.json()
+
+    def test_privatize_moves_the_body_and_removes_the_post(self):
+        post = self.create(body="private thoughts")
+        data = self.privatize(post["id"])
+        self.assertFalse(Post.objects.filter(pk=post["id"]).exists())
+        entry = JournalEntry.objects.get(pk=data["entry"]["id"])
+        self.assertEqual(entry.body, "private thoughts")
+        self.assertEqual(entry.author, self.user)
+
+    def test_privatized_post_url_is_gone_for_everyone(self):
+        post = self.create()
+        slug = post["slug"]
+        self.client.post(reverse("writer:api_post_publish", args=[post["id"]]))
+        data = self.privatize(post["id"])
+        self.assertTrue(data["was_published"])
+        # Still the verified author, so this would be a 200 if the row survived.
+        response = self.client.get(reverse("blog:post_detail", args=[slug]))
+        self.assertEqual(response.status_code, 404)
+
+    def test_privatize_keeps_the_publication_date(self):
+        post = self.create()
+        self.client.post(reverse("writer:api_post_publish", args=[post["id"]]))
+        published_at = Post.objects.get(pk=post["id"]).published_at
+        data = self.privatize(post["id"])
+        self.assertEqual(
+            data["entry"]["entry_date"], timezone.localtime(published_at).date().isoformat()
+        )
+
+    def test_privatize_reports_media_still_public(self):
+        post = self.create(body="text\n\n![x](/media/abc.png)\n")
+        self.assertEqual(self.privatize(post["id"])["media_refs"], 1)
+
+    def test_privatize_unknown_post_is_404(self):
+        response = self.client.post(reverse("writer:api_post_privatize", args=[9999]))
+        self.assertEqual(response.status_code, 404)
 
     def test_reserved_slug_is_refused(self):
         post = self.create()

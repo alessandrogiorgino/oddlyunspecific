@@ -23,6 +23,13 @@
     <span id="bufstate" class="bar__state"></span>
     <span class="bar__spacer"></span>
     <span id="dirty" class="bar__dirty" hidden>●</span>
+    {% comment %}
+    The mouse path to the command list. `help` in the prompt prints the same
+    thing to the log; both are generated from the command registry in
+    writer.js, so neither can fall behind the commands that exist.
+    {% endcomment %}
+    <button id="helpbtn" class="bar__help" type="button" aria-haspopup="dialog"
+            aria-label="commands and shortcuts" title="commands and shortcuts">?</button>
     <span class="bar__user">{{ boot_user }}@{{ SITE_NAME }}</span>
   </header>
 
@@ -51,6 +58,18 @@
   </div>
 
   <section id="log" class="log" aria-live="polite"></section>
+
+  {# Filled in by JS from the command registry each time it opens. #}
+  <div id="helpmodal" class="modal" role="dialog" aria-modal="true"
+       aria-labelledby="helptitle" hidden>
+    <div class="modal__card">
+      <div class="pane__head">
+        <span id="helptitle">commands</span>
+        <button id="helpclose" class="ghost" type="button" title="close (esc)">×</button>
+      </div>
+      <div id="helpbody" class="modal__body"></div>
+    </div>
+  </div>
 
   <footer class="bar bar--cmd">
     <label for="cmd" class="prompt">&#9656;</label>

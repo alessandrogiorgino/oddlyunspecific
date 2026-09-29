@@ -641,6 +641,7 @@ CSP allow it by name.
 | `slug <x>` | set the URL slug |
 | `summary <text>` | set the feed summary |
 | `tags a, b` | set tags |
+| `mv <id> !` | move the post into the private journal (the `!` is required) |
 | `rm <id> !` | delete (the `!` is required) |
 | `prev` | toggle the live preview pane |
 | `view` | open the live page in a new tab |
@@ -652,11 +653,28 @@ CSP allow it by name.
 The journal sits behind a `j` prefix so nothing private is ever one mistyped
 character away from a public command.
 
+`mv` is the one crossing between the two. It is a copy-then-delete inside one
+transaction, not a flag — there is no `is_public` column anywhere in this
+project, which is what keeps a forgotten `filter()` from leaking private
+writing. So the move keeps the title, the body and the publication date, and
+drops the slug, the summary and the tags: `JournalEntry` has nowhere to put
+them. Two things do not move. A public URL that existed stops resolving, caches
+and feed readers included; and images stay public, because `/media/` is served
+off the volume by Caddy with no session check — `mv` says how many the body
+references, but moving the text does not hide the pictures.
+
 ### Keys
 
 `ctrl+s` save · `ctrl+enter` save and publish · `ctrl+p` preview · `ctrl+k`
-focus the command line · `esc` move between command line and editor · `↑`/`↓`
-command history · `tab` completion.
+focus the command line · `ctrl+/` the command panel · `esc` move between command
+line and editor, or close the panel · `↑`/`↓` command history · `tab`
+completion.
+
+The `?` button at the right of the top bar opens the same list `help` prints, as
+a panel. Both are generated from the command registry in `writer.js` — the
+headings and their order are the only part written down, and a command missing
+from that list still shows up under "other". So the reference cannot fall behind
+the commands that exist.
 
 In the body: `ctrl+b` bold, `ctrl+i` italic, `ctrl+e` inline code. Each wraps
 the selection and unwraps it on a second press, whether the markers ended up
