@@ -267,3 +267,26 @@ main { flex: 1 0 auto; }
   .index a { grid-column: 1; grid-row: 2; }
   .index .excerpt { grid-column: 1; grid-row: 3; }
 }
+
+/* Checklists ("- [ ] x"): the renderer drops the marker and classes the item. */
+.prose li.task { list-style: none; position: relative; }
+.prose li.task::before {
+  content: ""; position: absolute; left: -1.4em; top: .3em;
+  width: .8em; height: .8em; border: 1.5px solid var(--muted); border-radius: 2px;
+}
+.prose li.task--done { color: var(--muted); text-decoration: line-through; }
+.prose li.task--done::before { background: var(--muted); }
+
+/* Private entries: the box is a real button that ticks the item. */
+.prose li.task:has(> .task__box)::before { content: none; }
+.prose li.task { scroll-margin-top: 40vh; }   /* land back mid-screen after a tick */
+.task__box {
+  position: absolute; left: -1.6em; top: .1em;
+  width: 1.2em; height: 1.2em; padding: 0; margin: 0;
+  background: transparent; cursor: pointer;
+  border: 1.5px solid var(--muted); border-radius: 3px;
+  background-clip: content-box; box-sizing: border-box;
+}
+.task__box::after { content: ""; display: block; margin: .15em; height: calc(100% - .3em); }
+.task--done > .task__box::after { background: var(--muted); }
+.task__box:hover, .task__box:focus-visible { border-color: var(--fg); outline: none; }

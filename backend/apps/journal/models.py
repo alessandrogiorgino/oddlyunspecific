@@ -59,7 +59,7 @@ class JournalEntry(models.Model):
         Caching the HTML in the database would put the plaintext right back
         into the column the encryption exists to protect.
         """
-        return render_markdown(self.body)
+        return render_markdown(self.body, notes=True)
 
     @property
     def excerpt(self):

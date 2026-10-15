@@ -104,3 +104,70 @@ class AccessTests(TestCase):
         response = self.client.get(reverse("journal:entry_list"))
         self.assertIn("noindex", response["X-Robots-Tag"])
         self.assertIn("no-store", response["Cache-Control"])
+
+
+class TaskToggleTests(TestCase):
+    BODY = "Set /230:\n- [ ] 2\n- [x] 7\n```\n- [ ] in code\n```\n- [ ] 8\n"
+
+    @classmethod
+    def setUpTestData(cls):
+        cls.user = get_user_model().objects.create_user(
+            "me", password="x" * 20, is_staff=True
+        )
+        cls.entry = JournalEntry.objects.create(body=cls.BODY, author=cls.user)
+
+    def url(self):
+        return reverse("journal:toggle_task", args=[self.entry.pk])
+
+    def body(self):
+        return JournalEntry.objects.get(pk=self.entry.pk).body
+
+    def test_page_shows_a_button_per_item(self):
+        verified_login(self.client, self.user)
+        html = self.client.get(self.entry.get_absolute_url()).content.decode()
+        self.assertEqual(html.count('class="task__box"'), 3)
+        self.assertIn('value="1:"', html)  # the ticked one offers to untick
+
+    def test_tick_and_untick(self):
+        verified_login(self.client, self.user)
+        response = self.client.post(self.url(), {"task": "2:x"})
+        self.assertRedirects(
+            response, self.entry.get_absolute_url() + "#task-2", fetch_redirect_response=False
+        )
+        self.assertIn("- [x] 8", self.body())
+        self.assertIn("- [ ] in code", self.body())  # fenced code is not an item
+        self.client.post(self.url(), {"task": "1:"})
+        self.assertIn("- [ ] 7", self.body())
+
+    def test_double_submit_is_harmless(self):
+        verified_login(self.client, self.user)
+        self.client.post(self.url(), {"task": "0:x"})
+        self.client.post(self.url(), {"task": "0:x"})
+        self.assertIn("- [x] 2", self.body())
+
+    def test_garbage_changes_nothing(self):
+        verified_login(self.client, self.user)
+        for value in ("", "x", "9:x", "-1:x", "0:y"):
+            self.client.post(self.url(), {"task": value})
+        self.assertEqual(self.body(), self.BODY)
+
+    def test_needs_second_factor(self):
+        self.client.force_login(self.user)
+        self.client.post(self.url(), {"task": "0:x"})
+        self.assertEqual(self.body(), self.BODY)
+
+    def test_other_authors_entry_is_404(self):
+        other = get_user_model().objects.create_user("other", password="y" * 20, is_staff=True)
+        verified_login(self.client, other)
+        self.assertEqual(self.client.post(self.url(), {"task": "0:x"}).status_code, 404)
+        self.assertEqual(self.body(), self.BODY)
+
+    def test_post_without_csrf_token_is_refused(self):
+        client = self.client_class(enforce_csrf_checks=True)
+        verified_login(client, self.user)
+        self.assertEqual(client.post(self.url(), {"task": "0:x"}).status_code, 403)
+        self.assertEqual(self.body(), self.BODY)
+
+    def test_get_is_refused(self):
+        verified_login(self.client, self.user)
+        self.assertEqual(self.client.get(self.url()).status_code, 405)

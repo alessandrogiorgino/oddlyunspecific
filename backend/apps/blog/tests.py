@@ -64,6 +64,34 @@ class RenderingTests(TestCase):
         self.assertIn("footnote", first)
         self.assertNotIn("footnote", second)
 
+    def test_list_straight_under_text_is_a_list(self):
+        html = render_markdown("Set /230:\n- one\n- two")
+        self.assertIn("<p>Set /230:</p>", html)
+        self.assertIn("<li>one</li>", html)
+
+    def test_text_straight_after_list_is_not_in_the_last_item(self):
+        html = render_markdown("- one\nNext set:\n- two")
+        self.assertIn("<li>one</li>", html)
+        self.assertIn("<p>Next set:</p>", html)
+
+    def test_year_at_line_start_is_not_a_list(self):
+        html = render_markdown("Born in\n2001. was a year")
+        self.assertNotIn("<li>", html)
+
+    def test_fenced_code_is_left_alone(self):
+        html = render_markdown("```\ntext\n- not a list\n```")
+        self.assertNotIn("<li>", html)
+
+    def test_checklists_become_task_items(self):
+        html = render_markdown("- [ ] 7\n- [x] 8")
+        self.assertIn('<li class="task">7</li>', html)
+        self.assertIn('<li class="task task--done">8</li>', html)
+        self.assertNotIn("[ ]", html)
+
+    def test_notes_mode_keeps_single_newlines(self):
+        self.assertIn("<br>", render_markdown("a\nb", notes=True))
+        self.assertNotIn("<br>", render_markdown("a\nb"))
+
 
 class SlugTests(TestCase):
     def test_reserved_slug_rejected(self):

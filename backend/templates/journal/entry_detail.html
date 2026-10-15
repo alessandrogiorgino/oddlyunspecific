@@ -15,7 +15,16 @@
   Rendered on every request rather than stored: caching this HTML in the
   database would put the plaintext back in the column encryption protects.
   {% endcomment %}
-  <div class="prose">{{ entry.html|safe }}</div>
+  {% for message in messages %}<p class="meta private-note">{{ message }}</p>{% endfor %}
+  {% comment %}
+  One form around the whole body: each checklist item is a submit button in
+  it (see views._clickable_tasks). The sanitiser strips <form>, so the body
+  cannot nest one of its own inside.
+  {% endcomment %}
+  <form method="post" action="{% url 'journal:toggle_task' entry.pk %}">
+    {% csrf_token %}
+    <div class="prose">{{ body_html }}</div>
+  </form>
 </article>
 
 <p class="back"><a href="{% url 'journal:entry_list' %}">← private</a></p>

@@ -384,3 +384,12 @@ a.bar__id:hover { text-decoration: underline; }
   .login form { grid-template-columns: 1fr; }
   .login button { grid-column: 1; }
 }
+
+/* Checklists, as in site.css. */
+.pane__body li.task { list-style: none; position: relative; }
+.pane__body li.task::before {
+  content: ""; position: absolute; left: -1.4em; top: .25em;
+  width: .8em; height: .8em; border: 1px solid currentColor; border-radius: 2px; opacity: .6;
+}
+.pane__body li.task--done { opacity: .55; text-decoration: line-through; }
+.pane__body li.task--done::before { background: currentColor; }

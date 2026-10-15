@@ -353,8 +353,19 @@
       }).catch(fail);
   });
 
+  /* `rm 4 !` and `rm 4!` both confirm: the "!" glued to the id is an easy typo,
+     and the old reply just repeated the same prompt. Strips it from args[0]. */
+  function confirmed(args) {
+    if (args[1] === "!") { return true; }
+    if (args.length === 1 && /^[^!]+!$/.test(args[0])) {
+      args[0] = args[0].slice(0, -1);
+      return true;
+    }
+    return false;
+  }
+
   define(["mv"], "move a post into the journal — `mv <id> !`", function (args) {
-    if (args[1] !== "!") {
+    if (!confirmed(args)) {
       return warn("this deletes the post and recreates it as a private entry — "
         + "slug, summary and tags are lost. confirm: `mv " + (args[0] || "<id>") + " !`");
     }
@@ -376,7 +387,7 @@
   });
 
   define(["rm"], "delete a post — `rm <id> !`", function (args) {
-    if (args[1] !== "!") { return warn("add ! to confirm: `rm " + (args[0] || "<id>") + " !`"); }
+    if (!confirmed(args)) { return warn("add ! to confirm: `rm " + (args[0] || "<id>") + " !`"); }
     return api("posts/" + encodeURIComponent(args[0]) + "/", { method: "DELETE" })
       .then(function () {
         if (buf && buf.kind === "post" && String(buf.id) === String(args[0])) {
@@ -430,7 +441,7 @@
         .catch(fail);
     }
     if (sub === "rm") {
-      if (args[1] !== "!") { return warn("add ! to confirm: `j rm " + (args[0] || "<id>") + " !`"); }
+      if (!confirmed(args)) { return warn("add ! to confirm: `j rm " + (args[0] || "<id>") + " !`"); }
       return api("journal/" + encodeURIComponent(args[0]) + "/", { method: "DELETE" })
         .then(function () {
           if (buf && buf.kind === "journal" && String(buf.id) === String(args[0])) {
@@ -533,7 +544,7 @@
   function renderPreview() {
     if (!buf) { return Promise.resolve(); }
     pull();
-    return api("preview/", { method: "POST", json: { body: buf.body } })
+    return api("preview/", { method: "POST", json: { body: buf.body, notes: buf.kind === "journal" } })
       .then(function (data) {
         els.sidetitle.textContent = "preview · live";
         /* Server-rendered and already through the same sanitiser the stored

@@ -34,10 +34,11 @@ ALLOWED_ATTRIBUTES = {
     # No "rel" here on purpose: nh3 sets it itself from link_rel below, and
     # refuses to do both.
     "a": {"href", "title", "id"},
+    # "task" / "task task--done" from _tasks() below.
+    "li": {"id", "class"},
     "img": {"src", "alt", "title", "width", "height", "loading"},
     "abbr": {"title"},
     "ol": {"start", "type"},
-    "li": {"id"},
     "th": {"align", "colspan", "rowspan", "scope"},
     "td": {"align", "colspan", "rowspan"},
     "col": {"span"},
@@ -73,18 +74,103 @@ EXTENSION_CONFIGS = {
 }
 
 _TAG_RE = re.compile(r"<[^>]+>")
+
+_FENCE_RE = re.compile(r"^ {0,3}(```|~~~)")
+_LIST_ITEM_RE = re.compile(r"^ {0,3}([-*+]|1[.)])\s")
+# A task item as Python-Markdown leaves it: tight (<li>[ ] x) or loose
+# (<li>\n<p>[ ] x). The marker is dropped and drawn by CSS from the class.
+_TASK_RE = re.compile(r"<li>(\s*<p>)?\[([ xX])\]\s+")
+
+
+def _separate_lists(text: str) -> str:
+    """
+    Put a blank line on both sides of a list that touches a line of text.
+
+    Notes apps (Apple Notes included) export lists with no blank lines around
+    them. Python-Markdown then folds a list into the paragraph above it, and a
+    line straight after a list into its last item ("lazy continuation"). Both
+    are what nobody typing in a notes app means. Ordered lists only count when
+    they start at 1, as in CommonMark, so "2001. was a year" stays prose.
+    Indented lines are left alone: they are nested items or continuations.
+    """
+    out = []
+    fenced = False
+    prev = ""
+    for line in text.splitlines():
+        if _FENCE_RE.match(line):
+            fenced = not fenced
+        elif not fenced and line.strip() and prev.strip() and not line.startswith((" ", "\t")):
+            is_item, prev_item = bool(_LIST_ITEM_RE.match(line)), bool(_LIST_ITEM_RE.match(prev))
+            if is_item and not prev_item and not prev.startswith((" ", "\t")):
+                out.append("")      # text, then a list
+            elif prev_item and not is_item:
+                out.append("")      # a list, then text
+        out.append(line)
+        prev = line
+    return "\n".join(out)
+
+
+def _tasks(html: str) -> str:
+    """GFM checklists ("- [ ] x", "- [x] x") into classed list items."""
+    def repl(m):
+        cls = "task task--done" if m.group(2) in "xX" else "task"
+        return '<li class="%s">%s' % (cls, m.group(1) or "")
+    return _TASK_RE.sub(repl, html)
+
+
+# The same items in the markdown source, for flipping one: optional
+# blockquote markers, a bullet or number, then the box.
+_SOURCE_TASK_RE = re.compile(r"^((?:[ \t]*>)*[ \t]*(?:[-*+]|\d+[.)])[ \t]+)\[([ xX])\](?=\s)")
+
+
+def task_lines(text: str) -> list[int]:
+    """Line numbers of the checklist items in `text`, in rendered order."""
+    lines = []
+    fenced = False
+    for i, line in enumerate(text.splitlines()):
+        if _FENCE_RE.match(line):
+            fenced = not fenced
+        elif not fenced and _SOURCE_TASK_RE.match(line):
+            lines.append(i)
+    return lines
+
+
+def set_task(text: str, n: int, done: bool) -> str | None:
+    """
+    Tick or untick the n-th checklist item (0-based) of `text`.
+
+    Returns None if the source and the render disagree on how many items there
+    are (an item inside an indented code block, raw <li class="task"> HTML):
+    then n could name the wrong line, and guessing would edit the wrong card.
+    """
+    lines = task_lines(text)
+    if not 0 <= n < len(lines) or len(lines) != render_markdown(text).count('<li class="task'):
+        return None
+    out = text.splitlines(keepends=True)
+    i = lines[n]
+    out[i] = _SOURCE_TASK_RE.sub(lambda m: m.group(1) + ("[x]" if done else "[ ]"), out[i], count=1)
+    return "".join(out)
+
+
 _WS_RE = re.compile(r"\s+")
 
 
-def render_markdown(text: str) -> str:
-    """Render untrusted-ish markdown to HTML that is safe to insert verbatim."""
+def render_markdown(text: str, notes: bool = False) -> str:
+    """
+    Render untrusted-ish markdown to HTML that is safe to insert verbatim.
+
+    notes=True is for the private journal: a single newline is a line break,
+    as in a notes app, instead of being folded into the paragraph.
+    """
     if not text:
         return ""
+    extensions = EXTENSIONS + ["nl2br"] if notes else EXTENSIONS
     # A fresh converter per call: markdown.Markdown instances carry state
     # between runs (footnote counters, the ToC) and leak it into the next post.
     html = markdown.Markdown(
-        extensions=EXTENSIONS, extension_configs=EXTENSION_CONFIGS, output_format="html"
-    ).convert(text)
+        extensions=extensions, extension_configs=EXTENSION_CONFIGS, output_format="html"
+    ).convert(_separate_lists(text))
+    html = _tasks(html)
     return nh3.clean(
         html,
         tags=ALLOWED_TAGS,

@@ -315,7 +315,8 @@ def preview(request):
         return _fail(str(exc))
     # Same renderer and same sanitiser the stored HTML goes through, so the
     # preview cannot show something the published page would strip.
-    return JsonResponse({"ok": True, "html": render_markdown(data.get("body") or "")})
+    html = render_markdown(data.get("body") or "", notes=data.get("notes") is True)
+    return JsonResponse({"ok": True, "html": html})
 
 
 @staff_otp_required
