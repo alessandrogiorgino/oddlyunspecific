@@ -5,6 +5,10 @@ ARG INSTALL_DEV=0
 
 # Build stage: wheels only, so the runtime image has no compiler in it.
 FROM python:3.12-slim AS build
+
+# eMudhra/emSign CA incident: https://discuss.python.org/t/109576
+RUN python -m pip install "pip>=26.2.2" "certifi>=2026.10.19"
+
 ARG INSTALL_DEV
 
 ENV PIP_NO_CACHE_DIR=1
@@ -23,6 +27,10 @@ RUN pip wheel --wheel-dir /wheels -r requirements.lock.txt \
 
 # Runtime stage.
 FROM python:3.12-slim
+
+# eMudhra/emSign CA incident: https://discuss.python.org/t/109576
+RUN python -m pip install "pip>=26.2.2" "certifi>=2026.10.19"
+
 ARG INSTALL_DEV
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
